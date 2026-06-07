@@ -3,6 +3,8 @@ package org.zotero.android.sync
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.zotero.android.architecture.Defaults
 import timber.log.Timber
 import java.io.File
@@ -69,7 +71,7 @@ class LinkedFileResolver @Inject constructor(
         }
     }
 
-    fun copyToTempFile(desktopPath: String, destFile: File) {
+    suspend fun copyToTempFile(desktopPath: String, destFile: File) = withContext(Dispatchers.IO) {
         val uri = resolveUri(desktopPath)
             ?: throw IllegalStateException("Cannot resolve linked file: $desktopPath")
         context.contentResolver.openInputStream(uri)?.use { input ->
