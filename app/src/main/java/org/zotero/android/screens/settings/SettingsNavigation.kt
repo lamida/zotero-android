@@ -16,6 +16,7 @@ import org.zotero.android.screens.settings.citesearch.SettingsCiteSearchScreen
 import org.zotero.android.screens.settings.csllocalepicker.SettingsCslLocalePickerScreen
 import org.zotero.android.screens.settings.debug.SettingsDebugLogScreen
 import org.zotero.android.screens.settings.debug.SettingsDebugScreen
+import org.zotero.android.screens.settings.linkedfile.SettingsLinkedFileScreen
 import org.zotero.android.screens.settings.quickcopy.SettingsQuickCopyScreen
 import org.zotero.android.screens.settings.stylepicker.SettingsStylePickerScreen
 import org.zotero.android.uicomponents.navigation.ZoteroNavHost
@@ -49,6 +50,7 @@ internal fun NavGraphBuilder.settingsNavScreens(
         toDebugScreen = navigation::toDebugScreen,
         toCiteScreen = navigation::toCiteScreen,
         toQuickCopyScreen = navigation::toQuickCopyScreen,
+        toLinkedFileScreen = navigation::toLinkedFileScreen,
     )
     accountScreen(
         onBack = navigation::onBack,
@@ -77,6 +79,7 @@ internal fun NavGraphBuilder.settingsNavScreens(
     debugLogScreen(onBack = navigation::onBack)
     singlePickerScreen(onBack = navigation::onBack)
     cslLocalePickerScreen(onBack = navigation::onBack)
+    linkedFileScreen(onBack = navigation::onBack)
 }
 
 fun NavGraphBuilder.settingsScreen(
@@ -85,6 +88,7 @@ fun NavGraphBuilder.settingsScreen(
     toDebugScreen: () -> Unit,
     toCiteScreen: () -> Unit,
     toQuickCopyScreen: () -> Unit,
+    toLinkedFileScreen: () -> Unit,
     onBack: () -> Unit,
 ) {
     composable(
@@ -97,6 +101,7 @@ fun NavGraphBuilder.settingsScreen(
             toDebugScreen = toDebugScreen,
             toCiteScreen = toCiteScreen,
             toQuickCopyScreen = toQuickCopyScreen,
+            toLinkedFileScreen = toLinkedFileScreen,
         )
     }
 }
@@ -158,6 +163,15 @@ private fun NavGraphBuilder.quickCopyScreen(
     }
 }
 
+private fun NavGraphBuilder.linkedFileScreen(
+    onBack: () -> Unit,
+) {
+    composable(
+        route = SettingsDestinations.LINKED_FILE,
+    ) {
+        SettingsLinkedFileScreen(onBack = onBack)
+    }
+}
 
 private fun NavGraphBuilder.citeSearchScreen(
     onBack: () -> Unit,
@@ -230,6 +244,7 @@ private object SettingsDestinations {
     const val CITE_SEARCH = "citeSearch"
     const val QUICK_COPY = "quickCopy"
     const val STYLE_PICKER = "stylePicker"
+    const val LINKED_FILE = "linkedFile"
 }
 
 fun ZoteroNavigation.toSettingsScreen() {
@@ -270,4 +285,8 @@ fun ZoteroNavigation.toSinglePickerScreen() {
 
 fun ZoteroNavigation.toCslLocalePicker() {
     navController.navigate(SettingsDestinations.CSL_LOCALE_PICKER)
+}
+
+fun ZoteroNavigation.toLinkedFileScreen() {
+    navController.navigate(SettingsDestinations.LINKED_FILE)
 }

@@ -295,6 +295,14 @@
     <string name="settings_translators_update">Update translators</string>
     <string name="settings_translators_updating">Updating…</string>
     <string name="settings_reset_to_bundled">Reset to bundled</string>
+    <string name="settings_linked_file_title">Linked File Folder</string>
+    <string name="settings_linked_file_description">Configure base paths to open linked attachments managed by ZotMoov or similar plugins. Sync your attachment folder to this device with the same directory structure as on your desktop.</string>
+    <string name="settings_linked_file_desktop_base">Desktop base path</string>
+    <string name="settings_linked_file_desktop_placeholder">/Users/you/Dropbox/ZoteroFiles</string>
+    <string name="settings_linked_file_android_folder">Android attachment folder</string>
+    <string name="settings_linked_file_choose_folder">Choose Folder</string>
+    <string name="settings_linked_file_change_folder">Change Folder</string>
+    <string name="settings_linked_file_clear_folder">Clear Folder</string>
     <string name="settings_debug">Debug Output Logging</string>
     <string name="settings_logging_title">Logging</string>
     <string name="settings_start_logging">Start Logging</string>
