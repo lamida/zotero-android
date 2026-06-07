@@ -188,7 +188,7 @@ class AttachmentCreator {
                 }
 
                 LinkMode.linkedFile -> {
-                    return linkedFileType(item = item)
+                    return linkedFileType(item = item, defaults = defaults)
                 }
 
                 LinkMode.linkedUrl -> {
@@ -444,7 +444,7 @@ class AttachmentCreator {
         }
 
 
-        private fun linkedFileType(item: RItem): Attachment.Kind? {
+        private fun linkedFileType(item: RItem, defaults: Defaults): Attachment.Kind? {
             val contentType = item.fields.firstOrNull { it.key == FieldKeys.Item.Attachment.contentType }?.value
             if (contentType == null || contentType.isEmpty()) {
                 Timber.e("AttachmentCreator: content type missing for item ${item.key}")
@@ -455,9 +455,19 @@ class AttachmentCreator {
                 Timber.e("AttachmentCreator: path missing for item ${item.key}")
                 return null
             }
-
             val filename = filename(item, ext = File(path).extension)
-            return Attachment.Kind.file(filename = filename, contentType = contentType, location = Attachment.FileLocation.local, linkType = Attachment.FileLinkType.linkedFile)
+            val location = if (defaults.getLinkedFileAndroidBaseUri() != null) {
+                Attachment.FileLocation.local
+            } else {
+                Attachment.FileLocation.remoteMissing
+            }
+            return Attachment.Kind.file(
+                filename = filename,
+                contentType = contentType,
+                location = location,
+                linkType = Attachment.FileLinkType.linkedFile,
+                linkedFilePath = path,
+            )
         }
         private fun priority(contentType: String): Int {
             return when (contentType) {
