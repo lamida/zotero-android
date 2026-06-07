@@ -15,6 +15,7 @@ import org.zotero.android.database.requests.MarkFileAsDownloadedDbRequest
 import org.zotero.android.files.FileStore
 import org.zotero.android.helpers.Unzipper
 import org.zotero.android.sync.LibraryIdentifier
+import org.zotero.android.sync.LinkedFileResolver
 import org.zotero.android.webdav.WebDavController
 import org.zotero.android.webdav.WebDavSessionStorage
 import timber.log.Timber
@@ -33,6 +34,7 @@ class AttachmentDownloader @Inject constructor(
     private val unzipper: Unzipper,
     private val webDavController: WebDavController,
     private val sessionStorage: WebDavSessionStorage,
+    private val linkedFileResolver: LinkedFileResolver,
 ) {
     sealed class Error : Exception() {
         object incompatibleAttachment : Error()
@@ -208,17 +210,29 @@ class AttachmentDownloader @Inject constructor(
                 val location = attachmentType.location
                 val linkType = attachmentType.linkType
                 when (linkType) {
-                    FileLinkType.linkedFile, FileLinkType.embeddedImage -> {
-                        Timber.i("AttachmentDownloader: tried opening linkedFile or embeddedImage ${attachment.key}")
-
+                    FileLinkType.embeddedImage -> {
+                        Timber.i("AttachmentDownloader: tried opening embeddedImage ${attachment.key}")
                         attachmentDownloaderEventStream.emitAsync(
                             Update.init(
                                 key = attachment.key,
                                 parentKey = parentKey,
                                 libraryId = attachment.libraryId,
-                                kind = Update.Kind.failed(
-                                    Error.incompatibleAttachment
-                                )
+                                kind = Update.Kind.failed(Error.incompatibleAttachment)
+                            )
+                        )
+                    }
+
+                    FileLinkType.linkedFile -> {
+                        val linkedPath = attachmentType.linkedFilePath
+                        val accessible = linkedPath != null && linkedFileResolver.exists(linkedPath)
+                        Timber.i("AttachmentDownloader: linkedFile ${attachment.key} accessible=$accessible")
+                        attachmentDownloaderEventStream.emitAsync(
+                            Update.init(
+                                key = attachment.key,
+                                parentKey = parentKey,
+                                libraryId = attachment.libraryId,
+                                kind = if (accessible) Update.Kind.ready
+                                       else Update.Kind.failed(Error.incompatibleAttachment)
                             )
                         )
                     }

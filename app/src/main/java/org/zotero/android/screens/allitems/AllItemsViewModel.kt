@@ -96,6 +96,7 @@ import org.zotero.android.sync.KeyGenerator
 import org.zotero.android.sync.Libraries
 import org.zotero.android.sync.Library
 import org.zotero.android.sync.LibraryIdentifier
+import org.zotero.android.sync.LinkedFileResolver
 import org.zotero.android.sync.Note
 import org.zotero.android.sync.SchemaController
 import org.zotero.android.sync.SyncKind
@@ -126,6 +127,7 @@ internal class AllItemsViewModel @Inject constructor(
     private val navigationParamsMarshaller: NavigationParamsMarshaller,
     private val updateSuggestionUseCase: UpdateSuggestionUseCase,
     private val defaults: Defaults,
+    private val linkedFileResolver: LinkedFileResolver,
 ) : BaseViewModel2<AllItemsViewState, AllItemsViewEffect>(AllItemsViewState()),
     AllItemsProcessorInterface {
 
@@ -264,11 +266,19 @@ internal class AllItemsViewModel @Inject constructor(
                 is Attachment.Kind.file -> {
                     val filename = attachmentType.filename
                     val contentType = attachmentType.contentType
-                    val file = fileStore.attachmentFile(
-                        libraryId = library.identifier,
-                        key = attachment.key,
-                        filename = filename,
-                    )
+                    val file: File = if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
+                        val linkedPath = attachmentType.linkedFilePath
+                            ?: throw IllegalStateException("linkedFile missing path for ${attachment.key}")
+                        val tempFile = fileStore.pdfReaderDirtyFile(filename)
+                        linkedFileResolver.copyToTempFile(linkedPath, tempFile)
+                        tempFile
+                    } else {
+                        fileStore.attachmentFile(
+                            libraryId = library.identifier,
+                            key = attachment.key,
+                            filename = filename,
+                        )
+                    }
                     when (contentType) {
                         "application/pdf" -> {
                             showPdf(
