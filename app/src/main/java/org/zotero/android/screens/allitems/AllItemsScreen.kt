@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import org.zotero.android.appupdate.MaybeShowAppUpdateBanner
 import org.zotero.android.architecture.ui.CustomLayoutSize
 import org.zotero.android.screens.allitems.bottomsheet.AllItemsAddBottomSheet
+import org.zotero.android.screens.allitems.bottomsheet.AllItemsLinkedFileBottomSheet
 import org.zotero.android.screens.allitems.table.AllItemsTable
 import org.zotero.android.uicomponents.CustomScaffoldM3
 import org.zotero.android.uicomponents.Strings
@@ -196,6 +197,7 @@ internal fun AllItemsScreen(
                     onItemTapped = viewModel::onItemTapped,
                     onAccessoryTapped = viewModel::onAccessoryTapped,
                     onItemLongTapped = viewModel::onItemLongTapped,
+                    onLinkedFileIconTapped = viewModel::onLinkedFileIconTapped,
                     onStartSync = viewModel::startSync
                 )
 
@@ -234,6 +236,13 @@ internal fun AllItemsScreen(
             onAddByIdentifier = viewModel::onAddByIdentifier,
             onClose = viewModel::onAddBottomSheetCollapse,
             showBottomSheet = viewState.shouldShowAddBottomSheet
+        )
+
+        AllItemsLinkedFileBottomSheet(
+            attachments = viewState.linkedFilePickerAttachments,
+            showBottomSheet = viewState.showLinkedFilePicker,
+            onAttachmentSelected = viewModel::onLinkedFilePickerSelected,
+            onClose = viewModel::onLinkedFilePickerDismissed,
         )
 
     }

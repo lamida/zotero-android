@@ -31,10 +31,26 @@ internal fun RowScope.ItemRowRightPart(
     onAccessoryTapped: (key: String) -> Unit,
     isItemSelected: (key: String) -> Boolean,
     onItemTapped: (item: ItemCellModel) -> Unit,
+    onLinkedFileIconTapped: (key: String) -> Unit,
 ) {
     ItemRowSetAccessory(
         accessory = itemAccessory,
     )
+    if (!isEditing && model.hasLinkedAttachments) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .align(Alignment.CenterVertically)
+                .clickable(onClick = { onLinkedFileIconTapped(model.key) }),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(Drawables.attachment_detail_linked_document),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
 //    Spacer(modifier = Modifier.width(8.dp))
     AnimatedContent(
         modifier = Modifier.align(Alignment.CenterVertically),
@@ -99,5 +115,3 @@ internal fun RowScope.ItemRowRightPart(
         }
     }
 }
-
-

@@ -33,6 +33,7 @@ internal fun ItemRow(
     onItemTapped: (item: ItemCellModel) -> Unit,
     onItemLongTapped: (key: String) -> Unit,
     onAccessoryTapped: (key: String) -> Unit,
+    onLinkedFileIconTapped: (key: String) -> Unit,
 ) {
     var rowModifier: Modifier = Modifier.height(64.dp)
     val isRowSelected = isItemSelected(cellModel.key)
@@ -73,7 +74,8 @@ internal fun ItemRow(
             itemAccessory = itemAccessory,
             onAccessoryTapped = onAccessoryTapped,
             isItemSelected = isItemSelected,
-            onItemTapped = onItemTapped
+            onItemTapped = onItemTapped,
+            onLinkedFileIconTapped = onLinkedFileIconTapped,
         )
         if (!isRowSelected) {
             Spacer(modifier = Modifier.width(8.dp))

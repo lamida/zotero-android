@@ -685,6 +685,35 @@ internal class AllItemsViewModel @Inject constructor(
         }
     }
 
+    fun onLinkedFileIconTapped(itemKey: String) {
+        val attachments = allItemsProcessor.getLinkedAttachments(itemKey)
+        if (attachments.isEmpty()) return
+        if (attachments.size == 1) {
+            val attachment = attachments[0]
+            val parentKey = if (attachment.key == itemKey) null else itemKey
+            allItemsProcessor.open(attachment = attachment, parentKey = parentKey)
+        } else {
+            updateState {
+                copy(
+                    linkedFilePickerItemKey = itemKey,
+                    linkedFilePickerAttachments = attachments.toPersistentList(),
+                    showLinkedFilePicker = true,
+                )
+            }
+        }
+    }
+
+    fun onLinkedFilePickerSelected(attachment: Attachment) {
+        val itemKey = viewState.linkedFilePickerItemKey ?: return
+        val parentKey = if (attachment.key == itemKey) null else itemKey
+        updateState { copy(showLinkedFilePicker = false) }
+        allItemsProcessor.open(attachment = attachment, parentKey = parentKey)
+    }
+
+    fun onLinkedFilePickerDismissed() {
+        updateState { copy(showLinkedFilePicker = false) }
+    }
+
     private fun showDoi(doi: String) {
         val url = "https://doi.org/$doi"
         triggerEffect(AllItemsViewEffect.OpenWebpage(url))
@@ -1367,6 +1396,9 @@ internal data class AllItemsViewState(
     val isGeneratingCitation: Boolean = false,
     val appUpdateBannerPayload: String = "",
     val shouldShowAppUpdateBanner: Boolean = false,
+    val showLinkedFilePicker: Boolean = false,
+    val linkedFilePickerItemKey: String? = null,
+    val linkedFilePickerAttachments: PersistentList<Attachment> = persistentListOf(),
 ) : ViewState {
     val tagsFilter: Set<String>?
         get() {

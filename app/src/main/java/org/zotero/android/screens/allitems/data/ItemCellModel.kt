@@ -19,6 +19,7 @@ data class ItemCellModel(
     val hasNote: Boolean,
     val accessory: Accessory?,
     val tagColors: SnapshotStateList<Color>,
+    val hasLinkedAttachments: Boolean = false,
 ) {
 
     sealed class Accessory {
@@ -33,6 +34,7 @@ data class ItemCellModel(
             item: RItem,
             typeName: String,
             accessory: Accessory?,
+            hasLinkedAttachments: Boolean = false,
         ): ItemCellModel {
             var dbRow = item.allItemsDbRow
             //This should not happen as during sync allItemsDbRow is always generated/updated
@@ -55,7 +57,8 @@ data class ItemCellModel(
                 subtitle = dbRow!!.subtitle,
                 hasNote = hasNote,
                 accessory = accessory,
-                tagColors = mutableStateListOf()
+                tagColors = mutableStateListOf(),
+                hasLinkedAttachments = hasLinkedAttachments,
             )
         }
 

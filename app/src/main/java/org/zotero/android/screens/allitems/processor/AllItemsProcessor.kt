@@ -28,6 +28,7 @@ import org.zotero.android.attachmentdownloader.AttachmentDownloader
 import org.zotero.android.attachmentdownloader.AttachmentDownloaderEventStream
 import org.zotero.android.database.DbWrapperMain
 import org.zotero.android.database.objects.Attachment
+import org.zotero.android.database.objects.ItemTypes
 import org.zotero.android.database.objects.RItem
 import org.zotero.android.database.requests.ReadItemsDbRequest
 import org.zotero.android.files.FileStore
@@ -72,6 +73,7 @@ class AllItemsProcessor @Inject constructor(
     private var results: RealmResults<RItem>? = null
 
     private val itemAccessories = mutableMapOf<String, ItemAccessory> ()
+    private val linkedItemAttachments = mutableMapOf<String, List<Attachment>>()
     private var updateItemKey: String? = null
     private var downloadBatchData: ItemsState.DownloadBatchData? = null
     private var attachmentToOpen: String? = null
@@ -394,7 +396,8 @@ class AllItemsProcessor @Inject constructor(
             dbWrapperMain = dbWrapperMain,
             item = item,
             accessory = cellAccessory(accessory),
-            typeName = typeName
+            typeName = typeName,
+            hasLinkedAttachments = linkedItemAttachments[item.key]?.isNotEmpty() == true,
         )
         val indexToReplace = itemCellModelsToUpdate.indexOfFirst { it.key == cellModel.key }
         if (!coroutineContext.isActive) {
@@ -558,6 +561,7 @@ class AllItemsProcessor @Inject constructor(
                     }
                     val modelToRemove = itemCellModelsToUpdate.removeAt(idx)
                     this@AllItemsProcessor.itemAccessories.remove(modelToRemove.key)
+                    this@AllItemsProcessor.linkedItemAttachments.remove(modelToRemove.key)
                 }
 
                 insertions.forEach { idx ->
@@ -569,6 +573,10 @@ class AllItemsProcessor @Inject constructor(
                     val itemAccessory = accessory(item)
                     if (itemAccessory != null) {
                         this@AllItemsProcessor.itemAccessories.put(item.key, itemAccessory)
+                    }
+                    val linkedAttachments = linkedAttachmentsFor(item)
+                    if (linkedAttachments.isNotEmpty()) {
+                        this@AllItemsProcessor.linkedItemAttachments[item.key] = linkedAttachments
                     }
                     if (!isActive) {
                         return@launch
@@ -595,6 +603,9 @@ class AllItemsProcessor @Inject constructor(
                     if (itemAccessory != null) {
                         this@AllItemsProcessor.itemAccessories.put(item.key, itemAccessory)
                     }
+                    val linkedAttachments = linkedAttachmentsFor(item)
+                    this@AllItemsProcessor.linkedItemAttachments[item.key] =
+                        if (linkedAttachments.isNotEmpty()) linkedAttachments else emptyList()
                     if (!isActive) {
                         return@launch
                     }
@@ -705,8 +716,38 @@ class AllItemsProcessor @Inject constructor(
     fun getItemAccessoryByKey(key: String): ItemAccessory? {
         return itemAccessories[key]
     }
+
     fun getResultByKey(key: String): RItem? {
         return this.results?.firstOrNull { it.key == key }
+    }
+
+    fun getLinkedAttachments(key: String): List<Attachment> {
+        return linkedItemAttachments[key] ?: emptyList()
+    }
+
+    private fun linkedAttachmentsFor(item: RItem): List<Attachment> {
+        if (item.rawType == ItemTypes.attachment) {
+            val kind = AttachmentCreator.attachmentType(
+                item = item, fileStorage = fileStore, isForceRemote = false,
+                urlDetector = null, defaults = defaults
+            ) ?: return emptyList()
+            if (kind !is Attachment.Kind.file || kind.linkType != Attachment.FileLinkType.linkedFile) {
+                return emptyList()
+            }
+            return listOf(Attachment(type = kind, title = item.displayTitle, key = item.key, libraryId = item.libraryId!!))
+        }
+        return item.children
+            ?.filter { it.rawType == ItemTypes.attachment }
+            ?.mapNotNull { child ->
+                val kind = AttachmentCreator.attachmentType(
+                    item = child, fileStorage = fileStore, isForceRemote = false,
+                    urlDetector = null, defaults = defaults
+                ) ?: return@mapNotNull null
+                if (kind !is Attachment.Kind.file || kind.linkType != Attachment.FileLinkType.linkedFile) {
+                    return@mapNotNull null
+                }
+                Attachment(type = kind, title = child.displayTitle, key = child.key, libraryId = child.libraryId!!)
+            } ?: emptyList()
     }
 
     private fun setSortOrder(ascending: Boolean) {

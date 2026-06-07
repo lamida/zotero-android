@@ -28,6 +28,7 @@ internal fun AllItemsTable(
     onItemTapped: (item: ItemCellModel) -> Unit,
     onItemLongTapped: (key: String) -> Unit,
     onAccessoryTapped: (key: String) -> Unit,
+    onLinkedFileIconTapped: (key: String) -> Unit,
     onStartSync: () -> Unit,
 ) {
     PullToRefreshBox(
@@ -50,6 +51,7 @@ internal fun AllItemsTable(
                         onItemLongTapped = onItemLongTapped,
                         onAccessoryTapped = onAccessoryTapped,
                         isItemSelected = isItemSelected,
+                        onLinkedFileIconTapped = onLinkedFileIconTapped,
                     )
                 }
             }
