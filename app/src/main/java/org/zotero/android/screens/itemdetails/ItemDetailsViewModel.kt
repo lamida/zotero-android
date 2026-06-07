@@ -1670,7 +1670,7 @@ class ItemDetailsViewModel @Inject constructor(
                 val file: File = if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
                     val linkedPath = attachmentType.linkedFilePath
                         ?: throw IllegalStateException("linkedFile missing path for ${attachment.key}")
-                    val tempFile = fileStore.pdfReaderDirtyFile(filename)
+                    val tempFile = fileStore.linkedFileTempFile(filename)
                     linkedFileResolver.copyToTempFile(linkedPath, tempFile)
                     tempFile
                 } else {

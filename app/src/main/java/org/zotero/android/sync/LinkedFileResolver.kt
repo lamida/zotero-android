@@ -19,20 +19,38 @@ class LinkedFileResolver @Inject constructor(
 ) {
 
     /**
-     * Resolves a desktop-absolute file path to a SAF document URI by traversing
-     * the selected tree one segment at a time. Works with any documents provider
-     * (external storage, Google Drive, Syncthing, etc.).
+     * Resolves a file path to a SAF document URI by traversing the selected tree one segment
+     * at a time. Works with any documents provider (external storage, Google Drive, Syncthing).
+     *
+     * Supports two path formats:
+     *  - Relative: "attachments:Author/filename.pdf" (ZotMoov default — no desktop base needed)
+     *  - Absolute: "/Users/lamida/.../filename.pdf" (requires desktop base path configured)
      */
     fun resolveUri(desktopPath: String): Uri? {
         val androidBaseUriString = defaults.getLinkedFileAndroidBaseUri() ?: return null
-        val desktopBase = defaults.getLinkedFileDesktopBasePath() ?: return null
+        val normalizedPath = desktopPath.replace('\\', '/')
 
-        val relativePath = computeRelativePath(desktopPath, desktopBase) ?: return null
+        val relativePath = if (normalizedPath.startsWith("attachments:")) {
+            val rel = normalizedPath.removePrefix("attachments:").trimStart('/')
+            if (rel.isEmpty()) {
+                Timber.w("LinkedFileResolver: empty relative path for '$desktopPath'")
+                return null
+            }
+            rel
+        } else {
+            val desktopBase = defaults.getLinkedFileDesktopBasePath() ?: run {
+                Timber.w("LinkedFileResolver: no desktop base configured for absolute path '$desktopPath'")
+                return null
+            }
+            computeRelativePath(desktopPath, desktopBase) ?: return null
+        }
+
         val segments = relativePath.split('/').filter { it.isNotEmpty() }
         if (segments.isEmpty()) return null
 
         return try {
             val treeUri = Uri.parse(androidBaseUriString)
+            Timber.i("LinkedFileResolver: resolving '$desktopPath' via segments $segments")
             traverseTree(treeUri, segments)
         } catch (e: Exception) {
             Timber.e(e, "LinkedFileResolver: failed to resolve URI for '$desktopPath'")
@@ -59,9 +77,13 @@ class LinkedFileResolver @Inject constructor(
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(1) ?: continue
                     if (name == segment) return@use cursor.getString(0)
+                    Timber.d("LinkedFileResolver: segment '$segment' != '$name'")
                 }
                 null
-            } ?: return null
+            } ?: run {
+                Timber.w("LinkedFileResolver: query returned null for segment '$segment' in $treeUri")
+                return null
+            }
             currentDocId = childDocId
         }
 
@@ -104,5 +126,8 @@ class LinkedFileResolver @Inject constructor(
             val relative = normalizedPath.removePrefix(normalizedBase).trimStart('/')
             return if (relative.isEmpty()) null else relative
         }
+
+        /** Returns true if [path] uses the ZotMoov relative format ("attachments:…"). */
+        fun isRelativePath(path: String): Boolean = path.startsWith("attachments:")
     }
 }
