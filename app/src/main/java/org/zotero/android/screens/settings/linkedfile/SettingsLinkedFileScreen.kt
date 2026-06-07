@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -27,17 +25,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import org.zotero.android.uicomponents.CustomScaffoldM3
 import org.zotero.android.uicomponents.Drawables
 import org.zotero.android.uicomponents.Strings
-import org.zotero.android.uicomponents.textinput.CustomOutlineTextField
 import org.zotero.android.uicomponents.themem3.AppThemeM3
 
 @Composable
@@ -71,8 +65,6 @@ internal fun SettingsLinkedFileScreen(
                 SettingsLinkedFileTopBar(onBack = onBack)
             },
         ) {
-            val focusManager = LocalFocusManager.current
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -86,30 +78,6 @@ internal fun SettingsLinkedFileScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                CustomOutlineTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = viewState.desktopBasePath,
-                    labelText = stringResource(id = Strings.settings_linked_file_desktop_base),
-                    placeholderText = stringResource(id = Strings.settings_linked_file_desktop_placeholder),
-                    onValueChange = viewModel::setDesktopBasePath,
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    onEnterOrTab = { focusManager.moveFocus(FocusDirection.Down) },
-                )
-
-                if (viewState.isBasePathAutoDetected) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(id = Strings.settings_linked_file_auto_detected),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

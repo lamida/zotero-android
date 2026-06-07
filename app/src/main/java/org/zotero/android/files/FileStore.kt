@@ -571,6 +571,12 @@ class FileStore @Inject constructor (
         return File(readerDirtyPdfFolder(), fileName)
     }
 
+    fun linkedFileTempFile(fileName: String): File {
+        val dir = File(context.filesDir, "linkedTemp")
+        dir.mkdirs()
+        return File(dir, fileName)
+    }
+
     fun stylesBundleExportDirectory(): File {
         val folderPath = File(getRootDirectory(), "stylesBundleExport")
         folderPath.mkdirs()
