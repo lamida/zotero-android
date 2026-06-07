@@ -102,6 +102,15 @@ internal fun SettingsLinkedFileScreen(
                     onEnterOrTab = { focusManager.moveFocus(FocusDirection.Down) },
                 )
 
+                if (viewState.isBasePathAutoDetected) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(id = Strings.settings_linked_file_auto_detected),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(

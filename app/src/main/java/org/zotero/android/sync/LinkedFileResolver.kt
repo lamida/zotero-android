@@ -19,46 +19,53 @@ class LinkedFileResolver @Inject constructor(
 ) {
 
     /**
-     * Resolves a desktop-absolute file path to a SAF document URI on Android.
-     *
-     * Strategy: strip the desktop base prefix from the stored path, then append
-     * the remaining relative path to the SAF tree URI.
-     *
-     * Example:
-     *   desktopPath  = "/Users/jon/Google Drive/My Drive/zotero/Adams/paper.pdf"
-     *   desktopBase  = "/Users/jon/Google Drive/My Drive/zotero"
-     *   androidBase  = content://com.android.externalstorage.documents/tree/...
-     *   result URI   = androidBase / Adams / paper.pdf
+     * Resolves a desktop-absolute file path to a SAF document URI by traversing
+     * the selected tree one segment at a time. Works with any documents provider
+     * (external storage, Google Drive, Syncthing, etc.).
      */
     fun resolveUri(desktopPath: String): Uri? {
         val androidBaseUriString = defaults.getLinkedFileAndroidBaseUri() ?: return null
         val desktopBase = defaults.getLinkedFileDesktopBasePath() ?: return null
 
         val relativePath = computeRelativePath(desktopPath, desktopBase) ?: return null
+        val segments = relativePath.split('/').filter { it.isNotEmpty() }
+        if (segments.isEmpty()) return null
 
         return try {
             val treeUri = Uri.parse(androidBaseUriString)
-            val rootDocId = DocumentsContract.getTreeDocumentId(treeUri)
-            val fileDocId = "$rootDocId/$relativePath"
-            DocumentsContract.buildDocumentUriUsingTree(treeUri, fileDocId)
+            traverseTree(treeUri, segments)
         } catch (e: Exception) {
-            Timber.e(e, "LinkedFileResolver: failed to build URI for path '$desktopPath'")
+            Timber.e(e, "LinkedFileResolver: failed to resolve URI for '$desktopPath'")
             null
         }
     }
 
-    companion object {
-        /** Strips [desktopBase] from [desktopPath] and returns the remaining relative path, or null if the path does not start with the base. */
-        internal fun computeRelativePath(desktopPath: String, desktopBase: String): String? {
-            val normalizedBase = desktopBase.trimEnd('/')
-            val normalizedPath = desktopPath.replace('\\', '/')
-            if (!normalizedPath.startsWith(normalizedBase)) {
-                Timber.w("LinkedFileResolver: path '$desktopPath' does not start with base '$desktopBase'")
-                return null
-            }
-            val relative = normalizedPath.removePrefix(normalizedBase).trimStart('/')
-            return if (relative.isEmpty()) null else relative
+    /** Walks the SAF tree one path segment at a time, returning the URI of the final node. */
+    private fun traverseTree(treeUri: Uri, segments: List<String>): Uri? {
+        val rootDocId = DocumentsContract.getTreeDocumentId(treeUri)
+        var currentDocId = rootDocId
+        val cr = context.contentResolver
+
+        for (segment in segments) {
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
+            val childDocId = cr.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                ),
+                null, null, null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(1) ?: continue
+                    if (name == segment) return@use cursor.getString(0)
+                }
+                null
+            } ?: return null
+            currentDocId = childDocId
         }
+
+        return DocumentsContract.buildDocumentUriUsingTree(treeUri, currentDocId)
     }
 
     fun exists(desktopPath: String): Boolean {
@@ -83,5 +90,19 @@ class LinkedFileResolver @Inject constructor(
                 input.copyTo(output)
             }
         } ?: throw IllegalStateException("Cannot open linked file stream: $desktopPath")
+    }
+
+    companion object {
+        /** Strips [desktopBase] from [desktopPath] and returns the remaining relative path. */
+        internal fun computeRelativePath(desktopPath: String, desktopBase: String): String? {
+            val normalizedBase = desktopBase.trimEnd('/')
+            val normalizedPath = desktopPath.replace('\\', '/')
+            if (!normalizedPath.startsWith(normalizedBase)) {
+                Timber.w("LinkedFileResolver: path '$desktopPath' does not start with base '$desktopBase'")
+                return null
+            }
+            val relative = normalizedPath.removePrefix(normalizedBase).trimStart('/')
+            return if (relative.isEmpty()) null else relative
+        }
     }
 }
