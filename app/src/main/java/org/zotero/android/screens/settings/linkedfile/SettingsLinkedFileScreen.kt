@@ -111,9 +111,10 @@ internal fun SettingsLinkedFileScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
 
-                if (viewState.androidBaseUri != null) {
+                val androidBaseUri = viewState.androidBaseUri
+                if (androidBaseUri != null) {
                     Text(
-                        text = viewState.androidBaseUri,
+                        text = androidBaseUri,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = 8.dp),

@@ -34,17 +34,7 @@ class LinkedFileResolver @Inject constructor(
         val androidBaseUriString = defaults.getLinkedFileAndroidBaseUri() ?: return null
         val desktopBase = defaults.getLinkedFileDesktopBasePath() ?: return null
 
-        val normalizedBase = desktopBase.trimEnd('/')
-        val normalizedPath = desktopPath.replace('\\', '/')
-
-        val relativePath = if (normalizedPath.startsWith(normalizedBase)) {
-            normalizedPath.removePrefix(normalizedBase).trimStart('/')
-        } else {
-            Timber.w("LinkedFileResolver: path '$desktopPath' does not start with base '$desktopBase'")
-            return null
-        }
-
-        if (relativePath.isEmpty()) return null
+        val relativePath = computeRelativePath(desktopPath, desktopBase) ?: return null
 
         return try {
             val treeUri = Uri.parse(androidBaseUriString)
@@ -54,6 +44,20 @@ class LinkedFileResolver @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "LinkedFileResolver: failed to build URI for path '$desktopPath'")
             null
+        }
+    }
+
+    companion object {
+        /** Strips [desktopBase] from [desktopPath] and returns the remaining relative path, or null if the path does not start with the base. */
+        internal fun computeRelativePath(desktopPath: String, desktopBase: String): String? {
+            val normalizedBase = desktopBase.trimEnd('/')
+            val normalizedPath = desktopPath.replace('\\', '/')
+            if (!normalizedPath.startsWith(normalizedBase)) {
+                Timber.w("LinkedFileResolver: path '$desktopPath' does not start with base '$desktopBase'")
+                return null
+            }
+            val relative = normalizedPath.removePrefix(normalizedBase).trimStart('/')
+            return if (relative.isEmpty()) null else relative
         }
     }
 
