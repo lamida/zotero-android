@@ -78,6 +78,9 @@ open class Defaults @Inject constructor(
 
     private val doNotShowAppUpdateBannerBeforeTime = "doNotShowAppUpdateBannerBeforeTime"
 
+    private val linkedFileDesktopBasePath = "linkedFileDesktopBasePath"
+    private val linkedFileAndroidBaseUri = "linkedFileAndroidBaseUri"
+
     private val sharedPreferences: SharedPreferences by lazy {
         context.getSharedPreferences(
             sharedPrefsFile,
@@ -592,6 +595,25 @@ open class Defaults @Inject constructor(
         setQuickCopyStyleId("http://www.zotero.org/styles/chicago-notes-bibliography")
         setExportOutputMethod(CitBibExportOutputMethod.copy)
         setExportOutputMode(CitBibExportOutputMode.bibliography)
+
+        setLinkedFileDesktopBasePath(null)
+        setLinkedFileAndroidBaseUri(null)
+    }
+
+    fun getLinkedFileDesktopBasePath(): String? {
+        return sharedPreferences.getString(linkedFileDesktopBasePath, null)
+    }
+
+    fun setLinkedFileDesktopBasePath(path: String?) {
+        sharedPreferences.edit { putString(linkedFileDesktopBasePath, path) }
+    }
+
+    fun getLinkedFileAndroidBaseUri(): String? {
+        return sharedPreferences.getString(linkedFileAndroidBaseUri, null)
+    }
+
+    fun setLinkedFileAndroidBaseUri(uri: String?) {
+        sharedPreferences.edit { putString(linkedFileAndroidBaseUri, uri) }
     }
 
 }

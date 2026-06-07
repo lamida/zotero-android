@@ -47,6 +47,9 @@ zotero.release.keystore
 keystore-secrets.txt
 pspdfkit-key.txt
 
+# Credentials
+.pw
+
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
 app/prod/release/

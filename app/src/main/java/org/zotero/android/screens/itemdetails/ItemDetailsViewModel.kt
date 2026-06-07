@@ -112,6 +112,7 @@ import org.zotero.android.sync.ItemDetailDataCreator
 import org.zotero.android.sync.KeyGenerator
 import org.zotero.android.sync.Library
 import org.zotero.android.sync.LibraryIdentifier
+import org.zotero.android.sync.LinkedFileResolver
 import org.zotero.android.sync.Note
 import org.zotero.android.sync.SchemaController
 import org.zotero.android.sync.Tag
@@ -152,6 +153,7 @@ class ItemDetailsViewModel @Inject constructor(
     private val dateParser: DateParser,
     private val context: Context,
     private val navigationParamsMarshaller: NavigationParamsMarshaller,
+    private val linkedFileResolver: LinkedFileResolver,
     stateHandle: SavedStateHandle,
 ) : BaseViewModel2<ItemDetailsViewState, ItemDetailsViewEffect>(ItemDetailsViewState()) {
 
@@ -1665,11 +1667,19 @@ class ItemDetailsViewModel @Inject constructor(
             is Attachment.Kind.file -> {
                 val filename = attachmentType.filename
                 val contentType = attachmentType.contentType
-                val file = fileStore.attachmentFile(
-                    libraryId = library.identifier,
-                    key = attachment.key,
-                    filename = filename,
-                )
+                val file: File = if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
+                    val linkedPath = attachmentType.linkedFilePath
+                        ?: throw IllegalStateException("linkedFile missing path for ${attachment.key}")
+                    val tempFile = fileStore.pdfReaderDirtyFile(filename)
+                    linkedFileResolver.copyToTempFile(linkedPath, tempFile)
+                    tempFile
+                } else {
+                    fileStore.attachmentFile(
+                        libraryId = library.identifier,
+                        key = attachment.key,
+                        filename = filename,
+                    )
+                }
                 when (contentType) {
                     "application/pdf" -> {
                         showPdf(file = file, parentKey = parentKey, attachment = attachment)

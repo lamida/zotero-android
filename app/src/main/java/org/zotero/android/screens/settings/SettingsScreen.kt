@@ -28,6 +28,7 @@ internal fun SettingsScreen(
     toDebugScreen: () -> Unit,
     toCiteScreen: () -> Unit,
     toQuickCopyScreen: () -> Unit,
+    toLinkedFileScreen: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     AppThemeM3 {
@@ -74,6 +75,10 @@ internal fun SettingsScreen(
                 NewSettingsItem(
                     title = stringResource(id = Strings.settings_cite_title),
                     onItemTapped = toCiteScreen,
+                )
+                NewSettingsItem(
+                    title = stringResource(id = Strings.settings_linked_file_title),
+                    onItemTapped = toLinkedFileScreen,
                 )
                 NewSettingsItem(
                     title = stringResource(id = Strings.settings_debug),
