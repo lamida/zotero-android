@@ -26,6 +26,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.0"
 }
 
+val gitHash: String = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+}.standardOutput.asText.map { it.trim() }.getOrElse("unknown")
+
 android {
     compileSdk = BuildConfig.compileSdkVersion
     namespace = "org.zotero.android"
@@ -47,6 +51,8 @@ android {
         buildConfigField("int", "BUILD_VERSION_MAJOR", "${BuildConfig.version.major}")
         buildConfigField("int", "BUILD_VERSION_MINOR", "${BuildConfig.version.minor}")
         buildConfigField("int", "BUILD_VERSION_PATCH", "${BuildConfig.version.patch}")
+        buildConfigField("String", "GIT_HASH", "\"$gitHash\"")
+
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")

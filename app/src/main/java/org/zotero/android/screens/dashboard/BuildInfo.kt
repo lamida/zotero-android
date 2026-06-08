@@ -22,7 +22,7 @@ fun BuildInfo() {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = BuildConfig.VERSION_NAME,
+            text = "${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_HASH})",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
