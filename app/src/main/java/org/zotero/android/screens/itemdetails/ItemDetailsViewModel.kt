@@ -129,7 +129,6 @@ import org.zotero.android.uicomponents.singlepicker.SinglePickerResult
 import org.zotero.android.uicomponents.singlepicker.SinglePickerStateCreator
 import timber.log.Timber
 import java.io.File
-import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Date
 import javax.inject.Inject
@@ -1685,9 +1684,7 @@ class ItemDetailsViewModel @Inject constructor(
                         showPdf(file = file, parentKey = parentKey, attachment = attachment)
                     }
                     "text/html", "text/plain" -> {
-                        val url = file.toUri().toString()
-                        val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
-                        triggerEffect(ItemDetailsViewEffect.ShowZoteroWebView(encodedUrl))
+                        openFile(file, contentType)
                     }
 //                    "text/html", "application/epub+zip" -> {
 //                        Timber.i("ItemDetailsViewModel: show HTML / EPUB ${attachment.key}")
