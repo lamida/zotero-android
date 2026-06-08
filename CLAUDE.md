@@ -31,24 +31,37 @@ This forces Gradle to use Java 17's jlink, which is compatible with the Android 
 
 **Release APK (local, app name "Zotero"):**
 
-The `internal` flavor produces the "Zotero" app name (not "Zotero Debug"). The play publisher plugin requires Play Store credentials to resolve the version code, so local builds need two setup steps and one task exclusion.
+The `internal` flavor produces the "Zotero" app name (not "Zotero Debug"). The play publisher plugin requires Play Store credentials for version codes, so local builds need a few one-time setup steps and one task exclusion.
 
-1. Generate a local keystore (one-time, do not commit):
+**One-time machine setup (do once, never repeat):**
 ```bash
-keytool -genkey -v -keystore zotero.release.keystore -alias zotero -keyalg RSA -keysize 2048 -validity 10000 \
+mkdir -p ~/.keystores
+keytool -genkey -v -keystore ~/.keystores/zotero-android.jks \
+  -alias zotero -keyalg RSA -keysize 2048 -validity 36500 \
   -storepass zoteropass -keypass zoteropass \
   -dname "CN=Zotero Android, OU=Dev, O=Lamida, L=Unknown, ST=Unknown, C=US"
 ```
+The keystore at `~/.keystores/zotero-android.jks` must **never be regenerated** — Android requires the exact same signing key to update an installed APK. If it is lost, all installed copies must be uninstalled before a new key will work.
 
-2. Create `keystore-secrets.txt` in the repo root (one-time, do not commit):
+**PSPDFKit key:** Without `pspdfkit-key.txt` the PDF reader runs in trial mode and stamps "For evaluation purposes only" on every page. The key is stored as `PSPDFKIT_KEY` in the upstream `zotero/zotero-android` CI secrets. Once obtained, create the file (do not commit):
+```bash
+echo "YOUR_KEY_HERE" > pspdfkit-key.txt
 ```
-zotero
-zoteropass
-zoteropass
-```
-(lines are: key alias, store password, key password)
 
-3. Seed the play publisher version-code file so Gradle has something to read:
+**Before each build** (run from the repo root or worktree root):
+
+1. Copy the permanent keystore and create secrets file (do not commit):
+```bash
+cp ~/.keystores/zotero-android.jks zotero.release.keystore
+printf "zotero\nzoteropass\nzoteropass\n" > keystore-secrets.txt
+```
+
+2. Ensure `local.properties` exists with the Android SDK path (do not commit). Worktrees do not inherit this from the main repo — copy it if missing:
+```bash
+cp /Users/lamida/github/lamida/zotero-android/local.properties local.properties
+```
+
+3. Seed the play publisher version-code file (only needed if `app/build/` was cleaned):
 ```bash
 mkdir -p app/build/intermediates/gpp/internalRelease
 echo "247" > app/build/intermediates/gpp/internalRelease/available-version-codes.txt
@@ -58,17 +71,16 @@ echo "247" > app/build/intermediates/gpp/internalRelease/available-version-codes
 ```bash
 ./gradlew app:assembleInternalRelease --no-configuration-cache -x processInternalReleaseVersionCodes
 ```
-
 Output: `app/build/outputs/apk/internal/release/app-internal-release.apk`
 
-5. Copy to Google Drive Transfer/Apps (replace `<hash>` with `git rev-parse --short HEAD`):
+5. Copy to Google Drive Transfer/Apps (always from master after PR is merged):
 ```bash
 GIT_HASH=$(git rev-parse --short HEAD)
 cp app/build/outputs/apk/internal/release/app-internal-release.apk \
   ~/Library/CloudStorage/GoogleDrive-jonkartagolamida@gmail.com/My\ Drive/Transfer/Apps/zotero-android-${GIT_HASH}-release.apk
 ```
 
-**Note:** `zotero.release.keystore` and `keystore-secrets.txt` are gitignored. If they don't exist yet, re-run steps 1-2. Step 3 only needs to be re-run if the `app/build` directory is cleaned.
+**Important:** Always build and copy from the master branch after the PR is merged, not from a feature branch. The hash in the filename must match the deployed commit on master.
 
 **Release bundle (requires Play Store credentials — CI only):**
 ```bash
@@ -77,12 +89,13 @@ cp app/build/outputs/apk/internal/release/app-internal-release.apk \
 
 **Run unit tests:**
 ```bash
-./gradlew test
+./gradlew app:testInternalReleaseUnitTest --no-configuration-cache -x processInternalReleaseVersionCodes
 ```
 
 **Run a single test class:**
 ```bash
-./gradlew test --tests "org.zotero.android.sync.DateParserTest"
+./gradlew app:testInternalReleaseUnitTest --no-configuration-cache -x processInternalReleaseVersionCodes \
+  --tests "org.zotero.android.sync.DateParserTest"
 ```
 
 ## Product Flavors
@@ -140,6 +153,18 @@ Requests live in `database/requests/`. `BaseViewModel2` exposes `suspend fun per
 ## Dependency Injection
 
 Hilt is used throughout. Dependency plugins in `buildSrc/src/main/kotlin/dependencyplugins/` group related dependencies into Gradle plugins (e.g., `composeDependencies`, `networkDependencies`).
+
+## Worktree cleanup
+
+After a PR is merged, remove its worktree from `.claude/worktrees/`:
+
+```bash
+git worktree remove .claude/worktrees/<branch-name>
+git push origin --delete <branch-name>
+git branch -d <branch-name>
+```
+
+List active worktrees anytime with `git worktree list`. The main repo working directory is always the repo root (master branch); worktrees live under `.claude/worktrees/`.
 
 ## Submodules
 
