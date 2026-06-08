@@ -1681,7 +1681,13 @@ class ItemDetailsViewModel @Inject constructor(
                 }
                 when (contentType) {
                     "application/pdf" -> {
-                        showPdf(file = file, parentKey = parentKey, attachment = attachment)
+                        if (attachmentType.linkType == Attachment.FileLinkType.linkedFile
+                            && defaults.openLinkedPdfExternally()
+                        ) {
+                            openFile(file, contentType)
+                        } else {
+                            showPdf(file = file, parentKey = parentKey, attachment = attachment)
+                        }
                     }
                     "text/html", "text/plain" -> {
                         openFile(file, contentType)

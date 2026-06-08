@@ -301,6 +301,8 @@
     <string name="settings_linked_file_choose_folder">Choose Folder</string>
     <string name="settings_linked_file_change_folder">Change Folder</string>
     <string name="settings_linked_file_clear_folder">Clear Folder</string>
+    <string name="settings_linked_file_open_externally">Open linked PDFs externally</string>
+    <string name="settings_linked_file_open_externally_description">Use an external PDF reader instead of Zotero\'s built-in reader</string>
     <string name="settings_debug">Debug Output Logging</string>
     <string name="settings_logging_title">Logging</string>
     <string name="settings_start_logging">Start Logging</string>

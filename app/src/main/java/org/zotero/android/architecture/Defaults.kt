@@ -616,4 +616,13 @@ open class Defaults @Inject constructor(
         sharedPreferences.edit { putString(linkedFileAndroidBaseUri, uri) }
     }
 
+    private val openLinkedPdfExternally = "openLinkedPdfExternally"
+
+    fun openLinkedPdfExternally(): Boolean =
+        sharedPreferences.getBoolean(openLinkedPdfExternally, false)
+
+    fun setOpenLinkedPdfExternally(value: Boolean) {
+        sharedPreferences.edit { putBoolean(openLinkedPdfExternally, value) }
+    }
+
 }

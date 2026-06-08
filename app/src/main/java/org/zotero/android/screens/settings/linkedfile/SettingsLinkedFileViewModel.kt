@@ -18,7 +18,17 @@ internal class SettingsLinkedFileViewModel @Inject constructor(
 ) : BaseViewModel2<SettingsLinkedFileViewState, SettingsLinkedFileViewEffect>(SettingsLinkedFileViewState()) {
 
     fun init() = initOnce {
-        updateState { copy(androidBaseUri = defaults.getLinkedFileAndroidBaseUri()) }
+        updateState {
+            copy(
+                androidBaseUri = defaults.getLinkedFileAndroidBaseUri(),
+                openExternally = defaults.openLinkedPdfExternally(),
+            )
+        }
+    }
+
+    fun onOpenExternallyToggled(enabled: Boolean) {
+        defaults.setOpenLinkedPdfExternally(enabled)
+        updateState { copy(openExternally = enabled) }
     }
 
     fun onAndroidFolderPicked(uri: Uri?) {
@@ -51,6 +61,7 @@ internal class SettingsLinkedFileViewModel @Inject constructor(
 
 internal data class SettingsLinkedFileViewState(
     val androidBaseUri: String? = null,
+    val openExternally: Boolean = false,
 ) : ViewState
 
 internal sealed class SettingsLinkedFileViewEffect : ViewEffect {

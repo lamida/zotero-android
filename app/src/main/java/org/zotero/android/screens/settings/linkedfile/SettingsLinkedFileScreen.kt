@@ -3,16 +3,19 @@ package org.zotero.android.screens.settings.linkedfile
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -32,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import org.zotero.android.uicomponents.CustomScaffoldM3
 import org.zotero.android.uicomponents.Drawables
 import org.zotero.android.uicomponents.Strings
+import org.zotero.android.uicomponents.controls.CustomSwitch
 import org.zotero.android.uicomponents.themem3.AppThemeM3
 
 @Composable
@@ -117,6 +122,37 @@ internal fun SettingsLinkedFileScreen(
                             stringResource(id = Strings.settings_linked_file_choose_folder)
                         else
                             stringResource(id = Strings.settings_linked_file_change_folder)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = stringResource(id = Strings.settings_linked_file_open_externally_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = Strings.settings_linked_file_open_externally),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.CenterStart),
+                    )
+                    CustomSwitch(
+                        checked = viewState.openExternally,
+                        onCheckedChange = viewModel::onOpenExternallyToggled,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 16.dp),
                     )
                 }
 
