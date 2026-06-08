@@ -688,7 +688,7 @@ internal class AllItemsViewModel @Inject constructor(
         if (attachments.size == 1) {
             val attachment = attachments[0]
             val parentKey = if (attachment.key == itemKey) null else itemKey
-            allItemsProcessor.open(attachment = attachment, parentKey = parentKey)
+            show(attachment, parentKey, library)
         } else {
             updateState {
                 copy(
@@ -704,7 +704,7 @@ internal class AllItemsViewModel @Inject constructor(
         val itemKey = viewState.linkedFilePickerItemKey ?: return
         val parentKey = if (attachment.key == itemKey) null else itemKey
         updateState { copy(showLinkedFilePicker = false) }
-        allItemsProcessor.open(attachment = attachment, parentKey = parentKey)
+        show(attachment, parentKey, library)
     }
 
     fun onLinkedFilePickerDismissed() {
