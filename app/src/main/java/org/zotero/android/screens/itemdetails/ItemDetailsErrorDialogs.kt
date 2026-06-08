@@ -160,6 +160,15 @@ internal fun ItemDetailsErrorDialogs(
             )
         }
 
+        is ItemDetailError.linkedFolderNotConfigured -> {
+            CustomAlertDialogM3(
+                title = stringResource(id = Strings.warning),
+                description = stringResource(id = Strings.linked_file_folder_not_configured),
+                confirmButton = CustomAlertDialogM3ActionConfig(text = stringResource(id = Strings.ok)),
+                onDismiss = onDismissErrorDialog
+            )
+        }
+
         is ItemDetailError.askUserToDeleteOrRestoreItem -> {
             CustomAlertDialogM3(
                 title = stringResource(id = Strings.item_detail_deleted_title),

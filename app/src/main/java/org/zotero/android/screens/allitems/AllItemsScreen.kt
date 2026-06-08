@@ -158,6 +158,7 @@ internal fun AllItemsScreen(
 
         CustomScaffoldM3(
             scrollBehavior = scrollBehavior,
+            snackbarMessage = viewState.snackbarMessage,
             topBar = {
                 AllItemsTopBar(
                     scrollBehavior = scrollBehavior,

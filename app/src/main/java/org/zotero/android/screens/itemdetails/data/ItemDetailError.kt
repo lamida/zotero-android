@@ -19,4 +19,5 @@ sealed class ItemDetailError: Exception() {
     object cantRemoveParent : ItemDetailError()
     object itemWasChangedRemotely : ItemDetailError()
     object askUserToDeleteOrRestoreItem : ItemDetailError()
+    object linkedFolderNotConfigured : ItemDetailError()
 }

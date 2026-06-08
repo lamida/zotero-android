@@ -1667,6 +1667,10 @@ class ItemDetailsViewModel @Inject constructor(
                 val filename = attachmentType.filename
                 val contentType = attachmentType.contentType
                 val file: File = if (attachmentType.linkType == Attachment.FileLinkType.linkedFile) {
+                    if (defaults.getLinkedFileAndroidBaseUri() == null) {
+                        updateState { copy(error = ItemDetailError.linkedFolderNotConfigured) }
+                        return
+                    }
                     val linkedPath = attachmentType.linkedFilePath
                         ?: throw IllegalStateException("linkedFile missing path for ${attachment.key}")
                     val tempFile = fileStore.linkedFileTempFile(filename)

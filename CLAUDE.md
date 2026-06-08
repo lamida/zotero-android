@@ -29,7 +29,48 @@ org.gradle.java.home=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/H
 ```
 This forces Gradle to use Java 17's jlink, which is compatible with the Android SDK's `core-for-system-modules.jar`. CI uses Java 17 (Zulu) and does not have this issue.
 
-**Release bundle (requires keystore secrets):**
+**Release APK (local, app name "Zotero"):**
+
+The `internal` flavor produces the "Zotero" app name (not "Zotero Debug"). The play publisher plugin requires Play Store credentials to resolve the version code, so local builds need two setup steps and one task exclusion.
+
+1. Generate a local keystore (one-time, do not commit):
+```bash
+keytool -genkey -v -keystore zotero.release.keystore -alias zotero -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass zoteropass -keypass zoteropass \
+  -dname "CN=Zotero Android, OU=Dev, O=Lamida, L=Unknown, ST=Unknown, C=US"
+```
+
+2. Create `keystore-secrets.txt` in the repo root (one-time, do not commit):
+```
+zotero
+zoteropass
+zoteropass
+```
+(lines are: key alias, store password, key password)
+
+3. Seed the play publisher version-code file so Gradle has something to read:
+```bash
+mkdir -p app/build/intermediates/gpp/internalRelease
+echo "247" > app/build/intermediates/gpp/internalRelease/available-version-codes.txt
+```
+
+4. Build:
+```bash
+./gradlew app:assembleInternalRelease --no-configuration-cache -x processInternalReleaseVersionCodes
+```
+
+Output: `app/build/outputs/apk/internal/release/app-internal-release.apk`
+
+5. Copy to Google Drive Transfer/Apps (replace `<hash>` with `git rev-parse --short HEAD`):
+```bash
+GIT_HASH=$(git rev-parse --short HEAD)
+cp app/build/outputs/apk/internal/release/app-internal-release.apk \
+  ~/Library/CloudStorage/GoogleDrive-jonkartagolamida@gmail.com/My\ Drive/Transfer/Apps/zotero-android-${GIT_HASH}-release.apk
+```
+
+**Note:** `zotero.release.keystore` and `keystore-secrets.txt` are gitignored. If they don't exist yet, re-run steps 1-2. Step 3 only needs to be re-run if the `app/build` directory is cleaned.
+
+**Release bundle (requires Play Store credentials — CI only):**
 ```bash
 ./gradlew publishInternalReleaseBundle
 ```
