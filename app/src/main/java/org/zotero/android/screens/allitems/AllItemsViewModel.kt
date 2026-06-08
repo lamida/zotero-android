@@ -280,12 +280,18 @@ internal class AllItemsViewModel @Inject constructor(
                     }
                     when (contentType) {
                         "application/pdf" -> {
-                            showPdf(
-                                file = file,
-                                key = attachment.key,
-                                parentKey = parentKey,
-                                library = library
-                            )
+                            if (attachmentType.linkType == Attachment.FileLinkType.linkedFile
+                                && defaults.openLinkedPdfExternally()
+                            ) {
+                                openFile(file, contentType)
+                            } else {
+                                showPdf(
+                                    file = file,
+                                    key = attachment.key,
+                                    parentKey = parentKey,
+                                    library = library
+                                )
+                            }
                         }
 
                         "text/html", "text/plain" -> {
