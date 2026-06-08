@@ -108,7 +108,6 @@ import org.zotero.android.uicomponents.singlepicker.SinglePickerStateCreator
 import org.zotero.android.uicomponents.snackbar.SnackbarMessage
 import timber.log.Timber
 import java.io.File
-import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Provider
@@ -290,9 +289,7 @@ internal class AllItemsViewModel @Inject constructor(
                         }
 
                         "text/html", "text/plain" -> {
-                            val url = file.toUri().toString()
-                            val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
-                            triggerEffect(AllItemsViewEffect.ShowZoteroWebView(encodedUrl))
+                            openFile(file, contentType)
                         }
 
 //                        "text/html", "application/epub+zip" -> {
