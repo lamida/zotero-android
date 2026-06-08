@@ -1,6 +1,7 @@
 package org.zotero.android.screens.allitems
 
 import android.content.Context
+import org.zotero.android.R
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.compose.runtime.mutableStateListOf
@@ -688,7 +689,22 @@ internal class AllItemsViewModel @Inject constructor(
         }
     }
 
+    fun dismissSnackbar() {
+        updateState { copy(snackbarMessage = null) }
+    }
+
     fun onLinkedFileIconTapped(itemKey: String) {
+        if (defaults.getLinkedFileAndroidBaseUri() == null) {
+            updateState {
+                copy(
+                    snackbarMessage = SnackbarMessage.ErrorMessageString(
+                        message = context.getString(R.string.linked_file_folder_not_configured),
+                        onDismiss = ::dismissSnackbar,
+                    )
+                )
+            }
+            return
+        }
         val attachments = allItemsProcessor.getLinkedAttachments(itemKey)
         if (attachments.isEmpty()) return
         if (attachments.size == 1) {
