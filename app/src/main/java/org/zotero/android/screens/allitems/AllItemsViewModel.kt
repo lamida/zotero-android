@@ -84,11 +84,11 @@ import org.zotero.android.screens.filter.data.FilterArgs
 import org.zotero.android.screens.filter.data.FilterReloadEvent
 import org.zotero.android.screens.filter.data.FilterResult
 import org.zotero.android.screens.filter.data.UpdateFiltersEvent
-import org.zotero.android.screens.htmlepub.reader.data.HtmlEpubReaderArgs
 import org.zotero.android.screens.itemdetails.data.DetailType
 import org.zotero.android.screens.itemdetails.data.ItemDetailsArgs
 import org.zotero.android.screens.mediaviewer.image.ImageViewerArgs
 import org.zotero.android.screens.mediaviewer.video.VideoPlayerArgs
+import org.zotero.android.screens.reader.data.ReaderArgs
 import org.zotero.android.screens.retrievemetadata.data.RetrieveMetadataArgs
 import org.zotero.android.screens.sortpicker.data.SortPickerArgs
 import org.zotero.android.sync.Collection
@@ -126,6 +126,7 @@ internal class AllItemsViewModel @Inject constructor(
     private val dispatchers: Dispatchers,
     private val navigationParamsMarshaller: NavigationParamsMarshaller,
     private val updateSuggestionUseCase: UpdateSuggestionUseCase,
+    private val createAttachmentsDbRequestFactory: CreateAttachmentsDbRequest.Factory,
     private val defaults: Defaults,
     private val linkedFileResolver: LinkedFileResolver,
 ) : BaseViewModel2<AllItemsViewState, AllItemsViewEffect>(AllItemsViewState()),
@@ -295,25 +296,19 @@ internal class AllItemsViewModel @Inject constructor(
                             }
                         }
 
-                        "text/html", "text/plain" -> {
-                            openFile(file, contentType)
+                        "text/html", "application/epub+zip" -> {
+                            Timber.i("AllItemsViewModel: show HTML / EPUB ${attachment.key}")
+                            showReader(
+                                file = file,
+                                key = attachment.key,
+                                parentKey = parentKey,
+                                library = library
+                            )
                         }
 
-//                        "text/html", "application/epub+zip" -> {
-//                            Timber.i("AllItemsViewModel: show HTML / EPUB ${attachment.key}")
-//                            showHtmlEpub(
-//                                file = file,
-//                                key = attachment.key,
-//                                parentKey = parentKey,
-//                                library = library
-//                            )
-//                        }
-//
-//                        "text/plain" -> {
-//                            val url = file.toUri().toString()
-//                            val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
-//                            triggerEffect(AllItemsViewEffect.ShowZoteroWebView(encodedUrl))
-//                        }
+                        "text/plain" -> {
+                            openFile(file, contentType)
+                        }
                         else -> {
                             if (contentType.contains("image")) {
                                 showImageFile(file)
@@ -514,7 +509,12 @@ internal class AllItemsViewModel @Inject constructor(
             }
         }
         val type = schemaController.localizedItemType(ItemTypes.attachment) ?: ""
-        val request = CreateAttachmentsDbRequest(attachments = attachments, parentKey = null, localizedType = type, collections = collections, fileStore = fileStore)
+        val request = createAttachmentsDbRequestFactory.create(
+            attachments = attachments,
+            parentKey = null,
+            localizedType = type,
+            collections = collections
+        )
 
         val result = perform(dbWrapperMain, invalidateRealm = true, request = request).ifFailure {
             Timber.e(it,"ItemsActionHandler: can't add attachment")
@@ -840,7 +840,7 @@ internal class AllItemsViewModel @Inject constructor(
         var collectionKey: String? = null
         when(this.collection.identifier) {
             is CollectionIdentifier.collection ->
-            collectionKey = this.collection.identifier.keyGet
+                collectionKey = this.collection.identifier.keyGet
             else -> {
                 //no-op
             }
@@ -1044,7 +1044,7 @@ internal class AllItemsViewModel @Inject constructor(
     }
 
     fun onAddToCollection() {
-       showCollectionPicker(getSelectedKeys())
+        showCollectionPicker(getSelectedKeys())
     }
 
     fun showRemoveFromCollectionQuestion(itemsKeys: Set<String>) {
@@ -1367,16 +1367,16 @@ internal class AllItemsViewModel @Inject constructor(
         triggerEffect(AllItemsViewEffect.ShowCitationBibliographyExportEffect)
     }
 
-    private fun showHtmlEpub(file: File, key: String, parentKey: String?, library: Library) {
+    private fun showReader(file: File, key: String, parentKey: String?, library: Library) {
         val uri = Uri.fromFile(file)
-        val htmlEpubReaderArgs = HtmlEpubReaderArgs(
+        val readerArgs = ReaderArgs(
             key = key,
             parentKey = parentKey,
             library = library,
             uri = uri,
         )
-        val params = navigationParamsMarshaller.encodeObjectToBase64(htmlEpubReaderArgs)
-        triggerEffect(AllItemsViewEffect.NavigateToHtmlEpubReaderScreen(params))
+        val params = navigationParamsMarshaller.encodeObjectToBase64(readerArgs)
+        triggerEffect(AllItemsViewEffect.NavigateToReaderScreen(params))
     }
 
 
@@ -1473,7 +1473,7 @@ internal sealed class AllItemsViewEffect : ViewEffect {
     object ShowVideoPlayer : AllItemsViewEffect()
     object ShowImageViewer : AllItemsViewEffect()
     data class NavigateToPdfScreen(val params: String, val encodedFilePath: String) : AllItemsViewEffect()
-    data class NavigateToHtmlEpubReaderScreen(val params: String) : AllItemsViewEffect()
+    data class NavigateToReaderScreen(val params: String) : AllItemsViewEffect()
     object ScreenRefresh : AllItemsViewEffect()
     object ShowScanBarcode : AllItemsViewEffect()
     data class ShowRetrieveMetadataDialogEffect(val params: String) : AllItemsViewEffect()
