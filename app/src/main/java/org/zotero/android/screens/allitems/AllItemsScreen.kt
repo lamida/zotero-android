@@ -116,7 +116,7 @@ internal fun AllItemsScreen(
                 is AllItemsViewEffect.NavigateToPdfScreen -> {
                     onShowPdf(consumedEffect.params, consumedEffect.encodedFilePath)
                 }
-                is AllItemsViewEffect.NavigateToHtmlEpubReaderScreen -> {
+                is AllItemsViewEffect.NavigateToReaderScreen -> {
                     onShowHtmlOrEpub(consumedEffect.params)
                 }
 

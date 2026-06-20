@@ -2,6 +2,7 @@ package org.zotero.android.screens.allitems.processor
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.toMutableStateList
+import dagger.hilt.android.scopes.ViewModelScoped
 import io.realm.OrderedCollectionChangeSet
 import io.realm.RealmResults
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
+@ViewModelScoped
 class AllItemsProcessor @Inject constructor(
     private val dispatchers: Dispatchers,
     private val defaults: Defaults,
@@ -61,7 +63,8 @@ class AllItemsProcessor @Inject constructor(
     private val attachmentDownloaderEventStream: AttachmentDownloaderEventStream,
     private val fileDownloader: AttachmentDownloader,
     private val fileCleanupController: AttachmentFileCleanupController,
-    private val onAttachmentFileDeletedEventStream: OnAttachmentFileDeletedEventStream
+    private val onAttachmentFileDeletedEventStream: OnAttachmentFileDeletedEventStream,
+    private val readItemsDbRequestFactory: ReadItemsDbRequest.Factory,
 ) {
     private lateinit var processorInterface: AllItemsProcessorInterface
 
@@ -253,13 +256,12 @@ class AllItemsProcessor @Inject constructor(
         if (!text.isNullOrEmpty()) {
             searchComponents = createComponents(text)
         }
-        val request = ReadItemsDbRequest(
+        val request = readItemsDbRequestFactory.create(
             collectionId = this.collection.identifier,
             libraryId = this.library.id,
             filters = filters,
             sortType = sortType,
             searchTextComponents = searchComponents,
-            defaults = this.defaults,
             isAsync = true
         )
         return dbWrapperMain.realmDbStorage.perform(request = request)
