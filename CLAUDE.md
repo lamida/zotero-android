@@ -18,6 +18,15 @@ scripts/bundle_utilities.sh
 scripts/bundle_reader.sh
 ```
 
+**After syncing upstream:** if an upstream merge bumped a submodule (e.g. `reader`), the working-tree submodule will be stale (`git submodule status` shows a leading `+`). Run `git submodule update --init --recursive` to check out the recorded commit, then re-run the matching bundle script (`scripts/bundle_reader.sh`) so the APK ships the updated assets, not the old ones.
+
+**`bundle_pdf-worker.py` may report failure but still be fine:** the script's `unzip` of the cmaps/fonts archive can exit with status 1 on a non-fatal *warning* even though all files extracted, which makes the Python `check_call` abort before it rebuilds `pdf-worker.zip`. Since the `pdf-worker` submodule and the fonts (fixed download URL) rarely change, the existing `app/src/main/assets/pdf-worker.zip` is usually still valid. To force a clean rebuild, remove the leftover extracted dirs first and re-zip manually:
+```bash
+cd pdf-worker && rm -rf cmaps standard_fonts pdf_worker_cmaps_and_fonts.zip
+zip -r -q ../app/src/main/assets/pdf-worker.zip .
+rm -rf cmaps standard_fonts pdf_worker_cmaps_and_fonts.zip   # keep submodule pristine
+```
+
 **Debug build:**
 ```bash
 ./gradlew assembleDevDebug
@@ -97,6 +106,37 @@ cp app/build/outputs/apk/internal/release/app-internal-release.apk \
 ./gradlew app:testInternalReleaseUnitTest --no-configuration-cache -x processInternalReleaseVersionCodes \
   --tests "org.zotero.android.sync.DateParserTest"
 ```
+
+## APK Output & Device Compatibility
+
+`app:assembleInternalRelease` produces a **single universal APK** (~167 MB) — no per-ABI splits. One file installs on every supported device. Inspect it with `aapt2` from the SDK build-tools:
+
+```bash
+AAPT=$(ls -1 "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+"$AAPT" dump badging app/build/outputs/apk/internal/release/app-internal-release.apk \
+  | grep -E "package:|SdkVersion|native-code|application-label:"
+```
+
+As built from master at `098dcfb3` (synced with upstream, versionCode 250):
+
+| Property | Value |
+|---|---|
+| `applicationId` | `org.zotero.android` |
+| App label | `Zotero` (internal flavor) |
+| `versionCode` / `versionName` | `250` / `1.0.0-250` |
+| `minSdkVersion` | 23 (Android 6.0) — see `buildSrc/src/main/kotlin/BuildConfig.kt` |
+| `targetSdkVersion` / `compileSdk` | 35 (Android 15) |
+| Bundled ABIs | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
+
+Because the APK is universal (covers `arm64-v8a`) with `minSdk` 23 and forward-compatible `targetSdk` 35, the same file runs on all modern Android versions. Verified target devices for this build:
+
+| Device | Android | API | Status |
+|---|---|---|---|
+| Onyx Tab Ultra C | 11 | 30 | ✓ supported |
+| Bigme B7 | 14 | 34 | ✓ supported |
+| Xiaomi 15 Ultra | 16 | 36 | ✓ supported (targetSdk 35, forward-compatible) |
+
+> **PDF watermark:** without `pspdfkit-key.txt` the build runs in trial mode and stamps "For evaluation purposes only" on PDF pages. The APK is otherwise fully functional. Supply the key (see PSPDFKit note above) for a clean build.
 
 ## Product Flavors
 
