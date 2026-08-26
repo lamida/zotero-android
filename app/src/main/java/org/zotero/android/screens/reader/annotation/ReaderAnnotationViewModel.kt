@@ -22,8 +22,10 @@ import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationArgs
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationColorResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationCommentResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationDeleteResult
+import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationFontSizeResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationScreenClosed
-import org.zotero.android.screens.reader.data.NewReaderAnnotation
+import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationSizeResult
+import org.zotero.android.screens.reader.data.ReaderAnnotation
 import org.zotero.android.screens.tagpicker.data.TagPickerArgs
 import org.zotero.android.screens.tagpicker.data.TagPickerResult
 import org.zotero.android.sync.Tag
@@ -71,6 +73,8 @@ internal class ReaderAnnotationViewModel @Inject constructor(
                 annotation = annotation,
                 tags = args.selectedAnnotation.tags.toImmutableList(),
                 commentFocusText = annotation.comment,
+                size = annotation.lineWidth ?: 1.0f,
+                fontSize = annotation.fontSize ?: 12.0f
             )
         }
     }
@@ -155,15 +159,52 @@ internal class ReaderAnnotationViewModel @Inject constructor(
         triggerEffect(ReaderAnnotationViewEffect.Back)
     }
 
+    fun onFontSizeDecrease() {
+        updateState {
+            copy(fontSize = viewState.fontSize - 0.5f)
+        }
+        postFontSizeChangeUpdate()
+    }
+
+    fun onFontSizeIncrease() {
+        updateState {
+            copy(fontSize = viewState.fontSize + 0.5f)
+        }
+        postFontSizeChangeUpdate()
+    }
+
+    private fun postFontSizeChangeUpdate() {
+        EventBus.getDefault().post(
+            ReaderAnnotationFontSizeResult(
+                key = viewState.annotation!!.key,
+                size = viewState.fontSize
+            )
+        )
+    }
+
+    fun onSizeChanged(newSize: Float) {
+        updateState {
+            copy(size = newSize)
+        }
+        EventBus.getDefault().post(
+            ReaderAnnotationSizeResult(
+                key = viewState.annotation!!.key,
+                size = newSize
+            )
+        )
+    }
+
 }
 
 internal data class ReaderAnnotationViewState(
     val isDark: Boolean = false,
-    val annotation: NewReaderAnnotation? = null,
+    val annotation: ReaderAnnotation? = null,
     val tags: ImmutableList<Tag> = persistentListOf(),
     val commentFocusText: String = "",
     val color: String = "",
     val colors: ImmutableList<String> = persistentListOf(),
+    val fontSize: Float = 12f,
+    val size: Float = 1.0f,
 ) : ViewState
 
 internal sealed class ReaderAnnotationViewEffect : ViewEffect {

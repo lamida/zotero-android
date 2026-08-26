@@ -5,9 +5,11 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import org.zotero.android.database.objects.AnnotationType
 import org.zotero.android.database.objects.AnnotationsConfig
+import org.zotero.android.helpers.formatter.iso8601DateFormatV2
 import org.zotero.android.helpers.formatter.iso8601WithFractionalSeconds
 import org.zotero.android.ktx.rounded
 import org.zotero.android.pdf.data.PDFDocumentAnnotation
+import java.util.Date
 
 class AnnotationConverterV2 {
     enum class Kind {
@@ -21,7 +23,6 @@ class AnnotationConverterV2 {
             data: JsonObject,
             author: String,
             isAuthor: Boolean,
-            lineWidthFromUser: Float? = null,
         ): PDFDocumentAnnotation? {
             val type = (data["type"]?.asString)?.let { AnnotationType.valueOf(it) } ?: return null
             if (!AnnotationsConfig.supportedV2.contains(type)) {
@@ -32,11 +33,11 @@ class AnnotationConverterV2 {
             val comment = data["comment"]?.asString?.let { it.trim().trim { it == '\n' } } ?: ""
             val sortIndex = data["sortIndex"]?.asString ?: return null
             val dateAdded = (data["dateCreated"]?.asString)?.let {
-                iso8601WithFractionalSeconds.parse(it)
+                parseJsonDate(it)
             } ?: return null
             val dateModified =
                 (data["dateModified"]?.asString)?.let {
-                    iso8601WithFractionalSeconds.parse(it)
+                    parseJsonDate(it)
                 } ?: return null
             val color = data["color"]?.asString ?: return null
             val position = data["position"]?.asJsonObject ?: return null
@@ -53,7 +54,7 @@ class AnnotationConverterV2 {
                 AnnotationType.ink -> {
                     rects = emptyList()
                     paths = pathsForInk(position["paths"].asJsonArray)
-                    lineWidth = lineWidthFromUser!!
+                    lineWidth = position["width"].asFloat
                 }
 
                 AnnotationType.image -> {
@@ -156,6 +157,14 @@ class AnnotationConverterV2 {
                         y.asFloat.rounded(3)
                     )
                 }
+            }
+        }
+
+        private fun parseJsonDate(dateString: String): Date? {
+            try {
+                return iso8601WithFractionalSeconds.parse(dateString)
+            } catch (e: Exception) {
+                return iso8601DateFormatV2.parse(dateString)
             }
         }
 

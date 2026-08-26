@@ -33,6 +33,7 @@ import org.zotero.android.architecture.BaseViewModel2
 import org.zotero.android.architecture.Defaults
 import org.zotero.android.architecture.EventBusConstants
 import org.zotero.android.architecture.LCE2
+import org.zotero.android.architecture.Result
 import org.zotero.android.architecture.ScreenArguments
 import org.zotero.android.architecture.ViewEffect
 import org.zotero.android.architecture.ViewState
@@ -55,6 +56,8 @@ import org.zotero.android.database.requests.EmptyTrashDbRequest
 import org.zotero.android.database.requests.MarkItemsAsTrashedDbRequest
 import org.zotero.android.database.requests.MarkObjectsAsDeletedDbRequest
 import org.zotero.android.database.requests.ReadItemDbRequest
+import org.zotero.android.database.requests.ReadItemsWithKeysDbRequest
+import org.zotero.android.database.requests.StoreLastReadDatesDbRequest
 import org.zotero.android.database.requests.key
 import org.zotero.android.files.FileStore
 import org.zotero.android.helpers.GetUriDetailsUseCase
@@ -93,6 +96,7 @@ import org.zotero.android.screens.retrievemetadata.data.RetrieveMetadataArgs
 import org.zotero.android.screens.sortpicker.data.SortPickerArgs
 import org.zotero.android.sync.Collection
 import org.zotero.android.sync.CollectionIdentifier
+import org.zotero.android.sync.CollectionIdentifier.CustomType
 import org.zotero.android.sync.KeyGenerator
 import org.zotero.android.sync.Libraries
 import org.zotero.android.sync.Library
@@ -287,7 +291,7 @@ internal class AllItemsViewModel @Inject constructor(
                             ) {
                                 openFile(file, contentType)
                             } else {
-                                showPdf(
+                                showReader(
                                     file = file,
                                     key = attachment.key,
                                     parentKey = parentKey,
@@ -1299,6 +1303,11 @@ internal class AllItemsViewModel @Inject constructor(
             ?.key(identifier.key)?.findFirst() != null)
     }
 
+    fun shouldIncludeRemoveFromRecentlyReadButton(): Boolean {
+        val identifier = this.collection.identifier
+        return (identifier as? CollectionIdentifier.custom)?.type == CustomType.recentlyRead
+    }
+
     fun shouldIncludeDuplicateButton(): Boolean {
         val item = allItemsProcessor.getResultByKey(getSelectedKeys().first())
         if(item == null) {
@@ -1368,15 +1377,17 @@ internal class AllItemsViewModel @Inject constructor(
     }
 
     private fun showReader(file: File, key: String, parentKey: String?, library: Library) {
-        val uri = Uri.fromFile(file)
         val readerArgs = ReaderArgs(
             key = key,
             parentKey = parentKey,
             library = library,
-            uri = uri,
         )
         val params = navigationParamsMarshaller.encodeObjectToBase64(readerArgs)
-        triggerEffect(AllItemsViewEffect.NavigateToReaderScreen(params))
+        val encodedFilePath = Uri.encode(file.absolutePath)
+        triggerEffect(AllItemsViewEffect.NavigateToReaderScreen(
+            params = params,
+            readerEncodedFilePathParam = encodedFilePath
+        ))
     }
 
 
@@ -1393,6 +1404,62 @@ internal class AllItemsViewModel @Inject constructor(
             copy(shouldShowAppUpdateBanner = false)
         }
     }
+
+    fun removeFromRecentlyRead() {
+        deleteItemsFromRecentlyRead(getSelectedKeys(), this.library.identifier)
+    }
+
+    private fun deleteItemsFromRecentlyRead(keys: Set<String>, libraryId: LibraryIdentifier) =
+        viewModelScope.launch {
+            performCoordinator(
+                dbWrapper = dbWrapperMain,
+                coordinatorAction = { coordinator ->
+                    val items = coordinator.perform(
+                        request = ReadItemsWithKeysDbRequest(
+                            keys = keys,
+                            libraryId = libraryId
+                        )
+                    )
+                    val toRemove = mutableListOf<StoreLastReadDatesDbRequest.Data>()
+                    for (item in items) {
+                        if (item.lastRead != null) {
+                            toRemove.add(
+                                StoreLastReadDatesDbRequest.Data(
+                                    key = item.key,
+                                    libraryId = libraryId,
+                                    date = null
+                                )
+                            )
+                        }
+                        for (child in item.children!!) {
+                            if (child.lastRead != null) {
+                                toRemove.add(
+                                    StoreLastReadDatesDbRequest.Data(
+                                        key = child.key,
+                                        libraryId = libraryId,
+                                        date = null
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    coordinator.perform(request = StoreLastReadDatesDbRequest(array = toRemove))
+                }, completion = { result ->
+                    if (result is Result.Failure) {
+                        Timber.e(
+                            result.exception,
+                            "AllItemsViewModel: can't remove items from recently read"
+                        )
+                        viewModelScope.launch {
+                            updateState {
+                                copy(
+                                    error = ItemsError.deletionFromRecentlyRead,
+                                )
+                            }
+                        }
+                    }
+                })
+        }
 
 }
 
@@ -1473,7 +1540,7 @@ internal sealed class AllItemsViewEffect : ViewEffect {
     object ShowVideoPlayer : AllItemsViewEffect()
     object ShowImageViewer : AllItemsViewEffect()
     data class NavigateToPdfScreen(val params: String, val encodedFilePath: String) : AllItemsViewEffect()
-    data class NavigateToReaderScreen(val params: String) : AllItemsViewEffect()
+    data class NavigateToReaderScreen(val params: String, val readerEncodedFilePathParam: String) : AllItemsViewEffect()
     object ScreenRefresh : AllItemsViewEffect()
     object ShowScanBarcode : AllItemsViewEffect()
     data class ShowRetrieveMetadataDialogEffect(val params: String) : AllItemsViewEffect()

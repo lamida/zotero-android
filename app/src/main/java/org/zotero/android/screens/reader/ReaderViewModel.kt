@@ -6,12 +6,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.RectF
-import android.net.Uri
 import android.webkit.WebView
 import androidx.compose.ui.text.TextStyle
-import androidx.core.net.toFile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonArray
@@ -20,9 +17,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.realm.OrderedCollectionChangeSet
 import io.realm.RealmObjectChangeListener
 import io.realm.RealmResults
-import kotlinx.collections.immutable.PersistentMap
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +38,9 @@ import org.zotero.android.architecture.ViewEffect
 import org.zotero.android.architecture.ViewState
 import org.zotero.android.architecture.ifFailure
 import org.zotero.android.architecture.navigation.NavigationParamsMarshaller
+import org.zotero.android.architecture.navigation.toolbar.data.SyncProgressHandler
 import org.zotero.android.architecture.require
+import org.zotero.android.database.DbRequest
 import org.zotero.android.database.DbWrapperMain
 import org.zotero.android.database.objects.AnnotationType
 import org.zotero.android.database.objects.AnnotationsConfig
@@ -53,6 +49,10 @@ import org.zotero.android.database.objects.RItem
 import org.zotero.android.database.objects.UpdatableChangeType
 import org.zotero.android.database.requests.CreateHtmlEpubAnnotationsDbRequest
 import org.zotero.android.database.requests.CreatePDFAnnotationsDbRequestV2
+import org.zotero.android.database.requests.EditAnnotationFontSizeDbRequest
+import org.zotero.android.database.requests.EditAnnotationPathsDbRequestV2
+import org.zotero.android.database.requests.EditAnnotationRectsDbRequestV2
+import org.zotero.android.database.requests.EditAnnotationRotationDbRequest
 import org.zotero.android.database.requests.EditItemFieldsDbRequest
 import org.zotero.android.database.requests.EditTagsForItemDbRequest
 import org.zotero.android.database.requests.MarkObjectsAsDeletedDbRequest
@@ -73,13 +73,16 @@ import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationArgs
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationColorResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationCommentResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationDeleteResult
+import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationFontSizeResult
 import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationScreenClosed
+import org.zotero.android.screens.reader.annotation.data.ReaderAnnotationSizeResult
 import org.zotero.android.screens.reader.annotationmore.data.ReaderAnnotationMoreArgs
 import org.zotero.android.screens.reader.annotationmore.data.ReaderAnnotationMoreDeleteResult
 import org.zotero.android.screens.reader.annotationmore.data.ReaderAnnotationMoreSaveResult
 import org.zotero.android.screens.reader.colorpicker.data.ReaderColorPickerArgs
 import org.zotero.android.screens.reader.colorpicker.data.ReaderColorPickerResult
 import org.zotero.android.screens.reader.data.NewReaderAnnotation
+import org.zotero.android.screens.reader.data.ReaderAnnotation
 import org.zotero.android.screens.reader.data.ReaderAnnotationTool
 import org.zotero.android.screens.reader.data.ReaderAnnotationsFilter
 import org.zotero.android.screens.reader.data.ReaderArgs
@@ -99,8 +102,7 @@ import org.zotero.android.screens.reader.settings.data.PageAppearanceMode
 import org.zotero.android.screens.reader.settings.data.ReaderSettings
 import org.zotero.android.screens.reader.settings.data.ReaderSettingsArgs
 import org.zotero.android.screens.reader.settings.data.ReaderSettingsChangeResult
-import org.zotero.android.screens.reader.sidebar.annotations.ReaderAnnotationBitmapManager
-import org.zotero.android.screens.reader.sidebar.annotations.cache.ReaderAnnotationBitmapCacheSnapshotEventStream
+import org.zotero.android.screens.reader.sidebar.data.ReaderRequestAnnotationImageRenderEventStream
 import org.zotero.android.screens.reader.sidebar.data.ReaderRequestThumbnailRenderEventStream
 import org.zotero.android.screens.reader.sidebar.data.ReaderScrollReaderIfNeededEvent
 import org.zotero.android.screens.reader.sidebar.data.ReaderSliderOptions
@@ -111,6 +113,7 @@ import org.zotero.android.screens.tagpicker.data.TagPickerArgs
 import org.zotero.android.screens.tagpicker.data.TagPickerResult
 import org.zotero.android.sync.AnnotationConverterV2
 import org.zotero.android.sync.KeyGenerator
+import org.zotero.android.sync.LastReadWatcher
 import org.zotero.android.sync.Library
 import org.zotero.android.sync.LibraryIdentifier
 import org.zotero.android.sync.SessionDataEventStream
@@ -143,9 +146,10 @@ class ReaderViewModel @Inject constructor(
     private val readerSearchTermEventStream: ReaderSearchTermEventStream,
     private val webCallChainEventStream: ReaderWebCallChainEventStream,
     private val readerRequestThumbnailRenderEventStream: ReaderRequestThumbnailRenderEventStream,
-    private val annotationBitmapManager: ReaderAnnotationBitmapManager,
-    private val annotationBitmapCacheSnapshotEventStream: ReaderAnnotationBitmapCacheSnapshotEventStream,
+    private val readerRequestAnnotationImageRenderEventStream: ReaderRequestAnnotationImageRenderEventStream,
     private val readerWebCallChainExecutor: ReaderWebCallChainExecutor,
+    private val lastReadWatcher: LastReadWatcher,
+    private val progressHandler: SyncProgressHandler,
 
     stateHandle: SavedStateHandle,
 ) : BaseViewModel2<ReaderViewState, ReaderViewEffect>(ReaderViewState())  {
@@ -157,7 +161,7 @@ class ReaderViewModel @Inject constructor(
     private var userId: Long = 0L
     private var username: String = ""
     private var selectedTextParams: JsonObject? = null
-    private var annotations = mutableMapOf<String, NewReaderAnnotation?>()
+    private var annotations = mutableMapOf<String, ReaderAnnotation?>()
     private var texts = mutableMapOf<String, Pair<String, Map<TextStyle, String>>?>()
     private val onCommentChangeFlow = MutableStateFlow<Pair<String, String>?>(null)
     private var comments = mutableMapOf<String, String>()
@@ -197,10 +201,15 @@ class ReaderViewModel @Inject constructor(
     var sidebarEditingEnabled: Boolean = false
 
 
-
     val screenArgs: ReaderArgs by lazy {
         val argsEncoded = stateHandle.get<String>(ARG_READER_SCREEN).require()
         navigationParamsMarshaller.decodeObjectFromBase64(argsEncoded)
+    }
+
+    private val screenFileArgs: File by lazy {
+        val filePathString = stateHandle.get<String>(ARG_READER_SCREEN_ENCODED_FILE_PATH_ARG).require()
+        val file = File(filePathString)
+        file
     }
 
     private var readerSearchTermCancellable: Job? = null
@@ -298,26 +307,9 @@ class ReaderViewModel @Inject constructor(
                 updateState {
                     copy(isDark = isDark)
                 }
-                clearAnnotationsBitmapCache()
                 triggerEffect(ReaderViewEffect.ScreenRefresh)
             }
             .launchIn(viewModelScope)
-    }
-
-    private fun setupAnnotationsBitmapCacheUpdateStream() {
-        annotationBitmapCacheSnapshotEventStream.flow()
-            .onEach { cacheSnapshot ->
-                Timber.d("ReaderThumbnailProcessing: thumbnailCache updated")
-                updateState {
-                    copy(annotationsBitmapCache = cacheSnapshot)
-                }
-            }
-            .launchIn(viewModelScope)
-    }
-
-
-    private fun clearAnnotationsBitmapCache() {
-        annotationBitmapManager.cancelProcessing()
     }
 
     private fun startObservingSearchTerm() {
@@ -353,13 +345,24 @@ class ReaderViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    private fun startObservingRequestAnnotationImageRender() {
+        readerRequestAnnotationImageRenderEventStream.flow()
+            .onEach { keys ->
+                Timber.d("ReaderAnnotationImageProcessing: requesting annotation images: ${keys}")
+                for (key in keys) {
+                    readerWebCallChainExecutor.renderAnnotationImages(key)
+                }
+            }
+
+            .launchIn(viewModelScope)
+    }
+
     fun initOnce(
         isTablet: Boolean,
         textFont: TextStyle,
     ) = initOnce {
         this.textFont = textFont
-        val uri = screenArgs.uri
-        initFileUris(uri)
+        initFileUris()
         copyReaderFiles()
         this.isTablet = isTablet
 
@@ -370,13 +373,11 @@ class ReaderViewModel @Inject constructor(
         startObservingTheme()
         startObservingSearchTerm()
         startObservingRequestThumbnailRender()
+        startObservingRequestAnnotationImageRender()
 
         setupCommentChangeFlow()
         setupAnnotationSearchStateFlow()
         setupOutlineSearchStateFlow()
-
-        setupAnnotationsBitmapCacheUpdateStream()
-        initAnnotationManager()
 
         this.activeLineWidth = defaults.getActiveLineWidth()
         this.activeEraserSize = defaults.getActiveEraserSize()
@@ -395,21 +396,18 @@ class ReaderViewModel @Inject constructor(
         }
         this.userId = sessionDataEventStream.currentValue()!!.userId
         this.username = defaults.getUsername()
+
+        updatePdfPageAppearanceMode(defaults.getReaderSettings())
+        updateState {
+            copy(isDark = pdfReaderCurrentThemeEventStream.currentValue()!!.isDark)
+        }
+        progressHandler.muteProgressToolbarForScreen()
+
     }
 
     fun initEveryTime(webView: WebView) {
         restartDisableForceScreenOnTimer()
         readerWebCallChainExecutor.start(webView = webView, file = this.readerFile)
-    }
-
-    private fun initAnnotationManager() {
-        annotationBitmapManager.init(viewModelScope)
-        val annotationsBitmapCache = annotationBitmapManager.generateEmptySnapshot().toPersistentMap()
-        updateState {
-            copy(
-                annotationsBitmapCache = annotationsBitmapCache
-            )
-        }
     }
 
     private fun copyReaderFiles() {
@@ -423,23 +421,18 @@ class ReaderViewModel @Inject constructor(
         this.key = params.key
         this.parentKey = params.parentKey
         this.library = params.library
-        updateState {
-            copy(
-                fileType = decideFileType()
-            )
-        }
     }
 
 
-    private fun initFileUris(uri: Uri) {
-        this.originalFile = uri.toFile()
+    private fun initFileUris() {
+        this.originalFile = screenFileArgs
         this.readerDirectory = fileStore.runningReaderDirectory()
         this.documentFile = fileStore.runningReaderUserFileSubDirectory(originalFile.extension)
         this.readerFile = File(readerDirectory, "view.html")
 
     }
 
-    fun restartDisableForceScreenOnTimer() {
+    private fun restartDisableForceScreenOnTimer() {
         viewModelScope.launch {
             triggerEffect(ReaderViewEffect.EnableForceScreenOn)
         }
@@ -613,7 +606,6 @@ class ReaderViewModel @Inject constructor(
                 data = pdfAnnotation.asJsonObject,
                 author = author,
                 isAuthor = isAuthor,
-                lineWidthFromUser = 2.0f//TODO fix
             )
             annotation
         }
@@ -678,15 +670,24 @@ class ReaderViewModel @Inject constructor(
 
 
     private suspend fun saveAnnotationFromSelection(type: AnnotationType) {
-        //TODO support will be added later
-        if (viewState.fileType == ReaderFileType.PDF) {
-            return
+        val textParams =
+            this.selectedTextParams?.get("annotation")?.asJsonObject ?: return
+        val params = params(textParams, type) ?: return
+
+        val annotations = if (viewState.fileType == ReaderFileType.PDF) {
+            parsePdfJson(
+                pdfAnnotations = JsonArray().apply { add(params) },
+                author = this.username,
+                isAuthor = true
+            )
+        } else {
+            parseHtmlEpubJson(
+                annotations = JsonArray().apply { add(params) },
+                author = this.username,
+                isAuthor = true
+            )
         }
 
-      val textParams =
-            this.selectedTextParams?.get("annotation")?.asJsonObject ?: return
-        val params = params( textParams, type) ?: return
-        val annotations = parseHtmlEpubJson(JsonArray().apply { add(params) }, author =  this.username, isAuthor = true)
         this.selectedTextParams = null
         for (annotation in annotations) {
             this.annotations[annotation.key] = annotation
@@ -697,7 +698,11 @@ class ReaderViewModel @Inject constructor(
             insertions = JsonArray().apply { add(params) },
             deletions = JsonArray()
         )
-        createHtmlEpubDatabaseAnnotations(annotations = annotations)
+        if (viewState.fileType == ReaderFileType.PDF) {
+            createPdfDatabaseAnnotations(annotations = annotations as List<PDFDocumentAnnotation>)
+        } else {
+            createHtmlEpubDatabaseAnnotations(annotations = annotations as List<NewReaderAnnotation>)
+        }
     }
 
 
@@ -814,24 +819,28 @@ class ReaderViewModel @Inject constructor(
         if (annotation != null && viewState.activeTool != null) {
             toggle(viewState.activeTool!!)
         }
-        if (viewState.fileType == ReaderFileType.PDF) {
-            createPdfDatabaseAnnotations(annotations = annotations as List<PDFDocumentAnnotation>)
-        } else {
-            createHtmlEpubDatabaseAnnotations(annotations = annotations as List<NewReaderAnnotation>)
-        }
 
+        val newAnnotations = annotations.filter { this.annotations[it.key] == null }
+        val editedAnnotations = annotations.filter { this.annotations[it.key] != null }
 
-        rawAnnotations.forEach {
-            val data = it.asJsonObject
-            val key = data["id"]?.asString
-            val imageBase64 = data["image"]?.asString
-            if (key != null && imageBase64 != null) {
-                annotationBitmapManager.store(
-                    key = key,
-                    encodedImageBase64String = imageBase64
-                )
+        if (newAnnotations.isNotEmpty()) {
+            for (newAnnotation in newAnnotations) {
+                this.annotations[newAnnotation.key] = newAnnotation
             }
-
+            if (viewState.fileType == ReaderFileType.PDF) {
+                createPdfDatabaseAnnotations(annotations = newAnnotations as List<PDFDocumentAnnotation>)
+            } else {
+                createHtmlEpubDatabaseAnnotations(annotations = newAnnotations as List<NewReaderAnnotation>)
+            }
+        }
+        for (editedAnnotation in editedAnnotations) {
+            this.annotations[editedAnnotation.key] = editedAnnotation
+            if (viewState.fileType == ReaderFileType.PDF) {
+                editedAnnotation as PDFDocumentAnnotation
+                updatePdfDatabaseAnnotation(editedAnnotation)
+            } else {
+                updateHtmlEpubDatabaseAnnotation(editedAnnotation as NewReaderAnnotation)
+            }
         }
     }
 
@@ -846,12 +855,11 @@ class ReaderViewModel @Inject constructor(
 
     }
 
-    private suspend fun selectAnnotationFromDocument(key: String) {
-        _select(key = key, didSelectInDocument = true)
+    private suspend fun selectAnnotationFromDocument(key: String, inlineTextEditing: Boolean = false) {
+        _select(key = key, didSelectInDocument = true, inlineTextEditing = inlineTextEditing)
     }
 
-
-    private suspend fun _select(key: String?, didSelectInDocument: Boolean) {
+    private suspend fun _select(key: String?, didSelectInDocument: Boolean, inlineTextEditing: Boolean = false) {
         if (key == viewState.selectedAnnotationKey) {
             return
         }
@@ -893,13 +901,104 @@ class ReaderViewModel @Inject constructor(
             }
         }
         selectAndFocusAnnotationInDocument()
-        openAnnotationDialog()
+        openAnnotationDialog(suppressPopup = inlineTextEditing)
     }
 
     private fun selectInDocument(key: String) {
         viewModelScope.launch {
             readerWebCallChainExecutor.selectInDocument(key)
         }
+    }
+
+    private fun updatePdfDatabaseAnnotation(annotation: PDFDocumentAnnotation) {
+        val key = annotation.key
+        val libraryId = this.library.identifier
+        val requests = mutableListOf<DbRequest>()
+
+        val fieldValues = mutableMapOf(
+            KeyBaseKeyPair(key = FieldKeys.Item.Annotation.color, baseKey = null) to annotation.color,
+            KeyBaseKeyPair(key = FieldKeys.Item.Annotation.comment, baseKey = null) to annotation.comment,
+        )
+
+        when (annotation.type) {
+            AnnotationType.ink -> {
+                requests.add(
+                    EditAnnotationPathsDbRequestV2(
+                        key = key,
+                        libraryId = libraryId,
+                        paths = annotation.paths
+                    )
+                )
+                val lineWidth = annotation.lineWidth
+                if (lineWidth != null) {
+                    fieldValues[
+                        KeyBaseKeyPair(
+                            key = FieldKeys.Item.Annotation.Position.lineWidth,
+                            baseKey = FieldKeys.Item.Annotation.position
+                        )
+                    ] = lineWidth.rounded(3).toString()
+                }
+            }
+
+            AnnotationType.text -> {
+                requests.add(
+                    EditAnnotationRectsDbRequestV2(
+                        key = key,
+                        libraryId = libraryId,
+                        rects = annotation.rects
+                    )
+                )
+                requests.add(
+                    EditAnnotationRotationDbRequest(
+                        key = key,
+                        libraryId = libraryId,
+                        rotation = annotation.rotation ?: 0
+                    )
+                )
+                requests.add(
+                    EditAnnotationFontSizeDbRequest(
+                        key = key,
+                        libraryId = libraryId,
+                        size = (annotation.fontSize ?: 0f).toInt()
+                    )
+                )
+            }
+
+            AnnotationType.note, AnnotationType.highlight, AnnotationType.image, AnnotationType.underline -> {
+                requests.add(
+                    EditAnnotationRectsDbRequestV2(
+                        key = key,
+                        libraryId = libraryId,
+                        rects = annotation.rects
+                    )
+                )
+            }
+        }
+
+        requests.add(
+            0,
+            editItemFieldsDbRequestFactory.create(
+                key = key,
+                libraryId = libraryId,
+                fieldValues = fieldValues,
+            )
+        )
+
+        ignoreDbCallbackOnReaderModificationItemKeys.add(key)
+        dbWrapperMain.realmDbStorage.perform(requests)
+    }
+
+    private fun updateHtmlEpubDatabaseAnnotation(annotation: NewReaderAnnotation) {
+        val request = editItemFieldsDbRequestFactory.create(
+            key = annotation.key,
+            libraryId = this.library.identifier,
+            fieldValues = mapOf(
+                KeyBaseKeyPair(key = FieldKeys.Item.Annotation.color, baseKey = null) to annotation.color,
+                KeyBaseKeyPair(key = FieldKeys.Item.Annotation.comment, baseKey = null) to annotation.comment,
+            ),
+        )
+        ignoreDbCallbackOnReaderModificationItemKeys.add(annotation.key)
+        dbWrapperMain.realmDbStorage.perform(request)
     }
 
     private fun setTags(tags: List<Tag>, key: String) {
@@ -1013,22 +1112,25 @@ class ReaderViewModel @Inject constructor(
         }
         return snapshot.filter{ key ->
                 val annotation = this.annotations[key] ?:return@filter false
-            filter(annotation = annotation, term = term) && filter(annotation = annotation,  filter)
+            filter(annotation = annotation, term = term) && filter(annotation = annotation,  filter = filter)
         }
     }
 
-    private fun filter(annotation: NewReaderAnnotation, term: String?): Boolean {
+    private fun filter(annotation: ReaderAnnotation, term: String?): Boolean {
         if (term == null) {
             return true
         }
+        val username = defaults.getUsername()
+        val displayName = defaults.getDisplayName()
+
         return annotation.key.lowercase() == term.lowercase() ||
-                annotation.author.contains(term, ignoreCase = true) ||
+                annotation.author(displayName = displayName, username = username).contains(term, ignoreCase = true) ||
                 annotation.comment.contains(term, ignoreCase = true) ||
                 (annotation.text ?: "").contains(term, ignoreCase = true) ||
                 annotation.tags.any { it.name.contains(term, ignoreCase = true) }
     }
 
-    private fun filter(annotation: NewReaderAnnotation, filter: ReaderAnnotationsFilter?): Boolean {
+    private fun filter(annotation: ReaderAnnotation, filter: ReaderAnnotationsFilter?): Boolean {
         if (filter == null) {
             return true
         }
@@ -1144,7 +1246,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun decideFileType(): ReaderFileType {
-        return when (val extension = this.documentFile.extension.lowercase()) {
+        return when (val extension = screenFileArgs.extension.lowercase()) {
             "epub" -> {
                 ReaderFileType.EPUB
             }
@@ -1172,6 +1274,8 @@ class ReaderViewModel @Inject constructor(
     //When user adds new annotation via reader it gets added to DB, which triggers this callback
     //We need to skip it's execution otherwise it will trigger unnecessary reader update, whichc already has the correct state.
     private var ignoreDbCallbackOnReaderInsertionItemKey : String? = null
+
+    private val ignoreDbCallbackOnReaderModificationItemKeys = mutableSetOf<String>()
 
     fun update(
         changeSet: OrderedCollectionChangeSet,
@@ -1214,7 +1318,17 @@ class ReaderViewModel @Inject constructor(
 
             Timber.w("ReaderViewModel: update annotation $key")
             annotations[key] = annotation
-            updatedPdfAnnotations.add(json)
+            val isOwnEditEcho = ignoreDbCallbackOnReaderModificationItemKeys.remove(key)
+            val isSyncResponseVersionBump = item.changeType == UpdatableChangeType.syncResponse.name
+            if (!isOwnEditEcho && !isSyncResponseVersionBump) {
+                updatedPdfAnnotations.add(json)
+            }
+
+            if (!isSyncResponseVersionBump &&
+                (annotation.type == AnnotationType.image || annotation.type == AnnotationType.ink || annotation.type == AnnotationType.text)
+            ) {
+                readerRequestAnnotationImageRenderEventStream.emitAsync(listOf(key))
+            }
 
             if (canUpdate(key = key, item = item)) {
                 Timber.i("ReaderViewModel: update sidebar key $key")
@@ -1327,7 +1441,10 @@ class ReaderViewModel @Inject constructor(
 
         updateState {
             if (this@ReaderViewModel.snapshotKeys == null) {
-                copy(sortedKeys = keys)
+                copy(
+                    sortedKeys = keys,
+                    annotationsUpdatedCounter = annotationsUpdatedCounter + 1,
+                )
             } else {
                 this@ReaderViewModel.snapshotKeys = keys
                 copy(
@@ -1335,7 +1452,8 @@ class ReaderViewModel @Inject constructor(
                         snapshot = keys,
                         term = viewState.annotationSearchTerm,
                         filter = viewState.annotationFilter
-                    )
+                    ),
+                    annotationsUpdatedCounter = annotationsUpdatedCounter + 1,
                 )
             }
         }
@@ -1353,8 +1471,10 @@ class ReaderViewModel @Inject constructor(
                     page = page,
                     selectedAnnotationKey = viewState.selectedAnnotationKey
                 )
-                readerWebCallChainExecutor.loadDocument(documentData)
-                restoreWebViewState()
+                readerWebCallChainExecutor.loadDocument(
+                    data = documentData,
+                    isDark = pdfReaderCurrentThemeEventStream.currentValue()!!.isDark
+                )
             } else {
                 var shouldIgnoreUpdate = false
                 if (insertedPdfAnnotations.size() == 1) {
@@ -1366,11 +1486,13 @@ class ReaderViewModel @Inject constructor(
                 }
                 //TODO remove later if it doesnt lead to new issues
 //                if (!shouldIgnoreUpdate) {
+                if (!updatedPdfAnnotations.isEmpty || !insertedPdfAnnotations.isEmpty || !deletedPdfAnnotations.isEmpty) {
                     readerWebCallChainExecutor.updateView(
                         modifications = updatedPdfAnnotations,
                         insertions = insertedPdfAnnotations,
                         deletions = deletedPdfAnnotations
                     )
+                }
 //                }
 
             }
@@ -1438,6 +1560,7 @@ class ReaderViewModel @Inject constructor(
 
     override fun onCleared() {
         EventBus.getDefault().unregister(this)
+        progressHandler.unMuteProgressToolbarForScreen()
 
         item?.removeAllChangeListeners()
         annotationItems?.removeAllChangeListeners()
@@ -1447,6 +1570,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun deinitialiseReader() {
+        lastReadWatcher.submit(key = this.key, libraryId = this.library.identifier, date = Date())
         this.readerDirectory.deleteRecursively()
     }
 
@@ -1494,7 +1618,7 @@ class ReaderViewModel @Inject constructor(
                 saveAnnotations(successValue.params)
             }
             is ReaderWebData.selectAnnotationFromDocument -> {
-                selectAnnotationFromDocument(successValue.key)
+                selectAnnotationFromDocument(successValue.key, successValue.inlineTextEditing)
             }
             is ReaderWebData.setSelectedTextParams -> {
                 setSelectedTextParams(successValue.params)
@@ -1510,6 +1634,22 @@ class ReaderViewModel @Inject constructor(
             }
             ReaderWebData.toggleInterfaceVisibility -> {
                 decideTopBarAndBottomBarVisibility()
+            }
+
+            ReaderWebData.onViewContentInitialized -> {
+                val tool = viewState.activeTool
+                val color = tool?.let { viewState.toolColors[it] }
+                if (tool != null && color != null) {
+                    updateAnnotationToolDrawColorAndSize(annotationTool = tool, colorHex = color)
+                }
+                if (!savedSearchTerm.isEmpty()) {
+                    readerWebCallChainExecutor.search(savedSearchTerm)
+                }
+
+                updateState {
+                    copy(isReaderLoading = false)
+                }
+                readerWebCallChainExecutor.updateInterface(pdfReaderCurrentThemeEventStream.currentValue()!!.isDark)
             }
 
             else -> {
@@ -1539,6 +1679,12 @@ class ReaderViewModel @Inject constructor(
             return
         }
 
+        lastReadWatcher.submitAfterDelay(
+            key = this.key,
+            libraryId = this.library.identifier,
+            date = Date()
+        )
+
         if (viewState.fileType == ReaderFileType.PDF) {
             triggerEffect(
                 ReaderViewEffect.OnPageChanged(page.toInt())
@@ -1559,6 +1705,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun setViewStats(params: JsonObject) {
+        restartDisableForceScreenOnTimer()
+
         val stats = params["stats"]?.takeIf { it.isJsonObject }?.asJsonObject
         fun JsonObject.intOrNull(key: String): Int? =
             this[key]?.takeIf { it.isJsonPrimitive }?.asInt
@@ -1625,28 +1773,11 @@ class ReaderViewModel @Inject constructor(
             this.annotationItems?.removeAllChangeListeners()
             this.annotationItems = annotationItems
             startObservingAnnotationResults()
+
+            lastReadWatcher.submit(key = this.key, libraryId = this.library.identifier, date = Date())
         } catch (e: Exception) {
             Timber.e(e, "ReaderViewModel: could not load document")
         }
-    }
-
-    suspend fun restoreWebViewState() {
-//        if (viewState.selectedAnnotationKey != null) {
-//            selectInDocument(viewState.selectedAnnotationKey!!)
-//        focusDocumentLocation = location,
-//        }
-
-        val tool = viewState.activeTool
-        val color = tool?.let { viewState.toolColors[it] }
-        if (tool != null && color != null) {
-            updateAnnotationToolDrawColorAndSize(annotationTool = tool, colorHex = color)
-        }
-        if (!savedSearchTerm.isEmpty()) {
-            delay(400)
-            readerWebCallChainExecutor.search(savedSearchTerm)
-        }
-        delay(400)
-        updateAppearanceAccordingToSettings()
     }
 
 
@@ -1695,7 +1826,7 @@ class ReaderViewModel @Inject constructor(
         toggle(tool)
     }
 
-    fun annotation(key: String): NewReaderAnnotation? {
+    fun annotation(key: String): ReaderAnnotation? {
         return this.annotations[key]
     }
 
@@ -1744,7 +1875,7 @@ class ReaderViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    fun onTagsClicked(annotation: NewReaderAnnotation) {
+    fun onTagsClicked(annotation: ReaderAnnotation) {
         viewModelScope.launch {
             selectAnnotationFromDocument(key = annotation.key)
 
@@ -1783,7 +1914,7 @@ class ReaderViewModel @Inject constructor(
         val colors = mutableSetOf<String>()
         val tags = mutableSetOf<Tag>()
 
-        val processAnnotation: (NewReaderAnnotation) -> Unit = { annotation ->
+        val processAnnotation: (ReaderAnnotation) -> Unit = { annotation ->
             colors.add(annotation.color)
             for (tag in annotation.tags) {
                 tags.add(tag)
@@ -2166,8 +2297,8 @@ class ReaderViewModel @Inject constructor(
 
 
 
-    private fun openAnnotationDialog() {
-        val showAnnotationPopup = !viewState.showSideBar && viewState.selectedAnnotationKey != null
+    private fun openAnnotationDialog(suppressPopup: Boolean = false) {
+        val showAnnotationPopup = !suppressPopup && !viewState.showSideBar && viewState.selectedAnnotationKey != null
         if (showAnnotationPopup) {
             annotationEditReaderKey = viewState.selectedAnnotationKey
             val selectedAnnotation = annotationEditReaderKey?.let { this.annotations[it] }
@@ -2288,43 +2419,56 @@ class ReaderViewModel @Inject constructor(
 
     private fun update(readerSettings: ReaderSettings) {
         defaults.setReaderSettings(readerSettings)
-        updateAppearanceAccordingToSettings()
+        updatePdfPageAppearanceMode(readerSettings)
+        updateAppearanceAccordingToSettings(true)
     }
 
-    private fun updateAppearanceAccordingToSettings() {
+    private fun updateAppearanceAccordingToSettings(isSettingsUpdate: Boolean) {
         viewModelScope.launch {
             val readerSettings = defaults.getReaderSettings()
-            val oldPageAppearanceMode = when (readerSettings.appearanceMode) {
-                PageAppearanceMode.LIGHT -> {
-                    org.zotero.android.pdf.data.PageAppearanceMode.LIGHT
+            if (isSettingsUpdate) {
+                readerWebCallChainExecutor.updateInterface(pdfReaderCurrentThemeEventStream.currentValue()!!.isDark)
+                if (viewState.fileType == ReaderFileType.PDF || viewState.fileType == ReaderFileType.EPUB) {
+                    readerWebCallChainExecutor.setSpreadMode(readerSettings.spreadsMode)
                 }
-
-                PageAppearanceMode.DARK -> {
-                    org.zotero.android.pdf.data.PageAppearanceMode.DARK
-                }
-
-                PageAppearanceMode.AUTOMATIC -> {
-                    org.zotero.android.pdf.data.PageAppearanceMode.AUTOMATIC
+                if (viewState.fileType == ReaderFileType.EPUB) {
+                    readerWebCallChainExecutor.setFlowMode(readerSettings.pageLayoutFlowMode)
                 }
             }
 
-            pdfReaderThemeDecider.setPdfPageAppearanceMode(oldPageAppearanceMode)
-            readerWebCallChainExecutor.updateInterface(pdfReaderCurrentThemeEventStream.currentValue()!!.isDark)
-            readerWebCallChainExecutor.setFlowMode(readerSettings.pageLayoutFlowMode)
-            readerWebCallChainExecutor.setSpreadMode(readerSettings.spreadsMode)
         }
+    }
+
+    private fun updatePdfPageAppearanceMode(readerSettings: ReaderSettings) {
+        val oldPageAppearanceMode = when (readerSettings.appearanceMode) {
+            PageAppearanceMode.LIGHT -> {
+                org.zotero.android.pdf.data.PageAppearanceMode.LIGHT
+            }
+
+            PageAppearanceMode.DARK -> {
+                org.zotero.android.pdf.data.PageAppearanceMode.DARK
+            }
+
+            PageAppearanceMode.AUTOMATIC -> {
+                org.zotero.android.pdf.data.PageAppearanceMode.AUTOMATIC
+            }
+        }
+
+        pdfReaderThemeDecider.setPdfPageAppearanceMode(oldPageAppearanceMode)
     }
 
     private fun showUrl(url: String) {
         triggerEffect(ReaderViewEffect.OpenWebpage(url))
     }
 
-    fun dismissActionMenu() {
+    fun dismissActionMenu(deselectInReader: Boolean = false) {
         updateState {
             copy(selectedTextParamsRects = null)
         }
-        viewModelScope.launch {
-            readerWebCallChainExecutor.deselectText()
+        if (deselectInReader) {
+            viewModelScope.launch {
+                readerWebCallChainExecutor.deselectText()
+            }
         }
     }
 
@@ -2367,12 +2511,12 @@ class ReaderViewModel @Inject constructor(
 
     fun onHighlight() = viewModelScope.launch {
         saveAnnotationFromSelection(AnnotationType.highlight)
-        dismissActionMenu()
+        dismissActionMenu(deselectInReader = true)
     }
 
     fun onUnderline() = viewModelScope.launch {
         saveAnnotationFromSelection(AnnotationType.underline)
-        dismissActionMenu()
+        dismissActionMenu(deselectInReader = true)
     }
 
     private suspend fun scrollReaderIfNeeded(location: Map<String, Any>, animated: Boolean, completion: () -> Unit) {
@@ -2400,6 +2544,69 @@ class ReaderViewModel @Inject constructor(
 //        scrollIfNeeded(pageIndex, true) {
              select(annotationKey = annotationKey)
 //        }
+    }
+
+    fun initFileType() {
+        updateState {
+            copy(
+                fileType = decideFileType()
+            )
+        }
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onEvent(result: ReaderAnnotationSizeResult) {
+        setLineWidth(key = result.key, width = result.size)
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onEvent(result: ReaderAnnotationFontSizeResult) {
+        setFontSize(key = result.key, fontSize = result.size)
+    }
+
+    private fun setFontSize(key:String, fontSize: Float) {
+        val values = mapOf(KeyBaseKeyPair(key = FieldKeys.Item.Annotation.Position.fontSize, baseKey = null) to "$fontSize")
+        val request = editItemFieldsDbRequestFactory.create(
+            key = key,
+            libraryId = this.library.identifier,
+            fieldValues = values,
+        )
+
+        viewModelScope.launch {
+            perform(
+                dbWrapper = dbWrapperMain,
+                request = request
+            ).ifFailure {
+                Timber.e(it, "ReaderViewModel: can't set font size $key")
+                updateState {
+                    copy(error = Error.cantUpdateAnnotation)
+                }
+                return@launch
+            }
+        }
+    }
+
+    private fun setLineWidth(key:String, width: Float) {
+        val values = mapOf(KeyBaseKeyPair(key = FieldKeys.Item.Annotation.Position.lineWidth, baseKey = null) to width.rounded(3).toString())
+        val request = editItemFieldsDbRequestFactory.create(
+            key = key,
+            libraryId = this.library.identifier,
+            fieldValues = values,
+        )
+
+        viewModelScope.launch {
+            perform(
+                dbWrapper = dbWrapperMain,
+                request = request
+            ).ifFailure {
+                Timber.e(it, "ReaderViewModel: can't set line width $key")
+                updateState {
+                    copy(error = Error.cantUpdateAnnotation)
+                }
+                return@launch
+            }
+        }
+
     }
 
 }
@@ -2436,9 +2643,10 @@ data class ReaderViewState(
     val readerFilterArgs: ReaderFilterArgs? = null,
     val toolColors: Map<ReaderAnnotationTool, String> = emptyMap(),
     val focusDocumentLocationAnnotationKey: String? = null,
-    val annotationsBitmapCache: PersistentMap<String, Bitmap> = persistentMapOf(),
     val pageProgress: String? = null,
     val fileType: ReaderFileType = ReaderFileType.EPUB,
+    val isReaderLoading: Boolean = true,
+    val annotationsUpdatedCounter: Int = 0,
     ) : ViewState {
     fun isAnnotationSelected(annotationKey: String): Boolean {
         return this.selectedAnnotationKey == annotationKey
