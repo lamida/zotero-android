@@ -42,6 +42,8 @@ This forces Gradle to use Java 17's jlink, which is compatible with the Android 
 
 The `internal` flavor produces the "Zotero" app name (not "Zotero Debug"). The play publisher plugin requires Play Store credentials for version codes, so local builds need a few one-time setup steps and one task exclusion.
 
+> **Known broken as of the 2026-08 upstream sync (`com.github.triplet.play` bumped 3.12.1 → 4.0.0):** the `-x processInternalReleaseVersionCodes` exclusion below no longer works. In 4.0.0 that task's output is consumed directly by `generateInternalReleaseBuildConfig` via a Gradle provider, so excluding it fails the build ("Querying the mapped value... before task has completed") instead of just skipping the version-code lookup. The old `available-version-codes.txt` seed-file trick (step 3) is also gone — `ProcessArtifactVersionCodes` now always calls the real Play API when `resolutionStrategy` is `AUTO`, with no local-cache bypass. Until this is fixed, local `assembleInternalRelease` builds require real Play Store credentials. Validate merges/local changes with `./gradlew app:testDevDebugUnitTest` and `./gradlew assembleDevDebug` instead.
+
 **One-time machine setup (do once, never repeat):**
 ```bash
 mkdir -p ~/.keystores
@@ -98,12 +100,13 @@ cp app/build/outputs/apk/internal/release/app-internal-release.apk \
 
 **Run unit tests:**
 ```bash
-./gradlew app:testInternalReleaseUnitTest --no-configuration-cache -x processInternalReleaseVersionCodes
+./gradlew app:testDevDebugUnitTest --no-configuration-cache
 ```
+(As of the 2026-08 upstream sync, `testInternalReleaseUnitTest` no longer exists — upstream stopped generating a unit-test variant for the release build type. Use `testDevDebugUnitTest`.)
 
 **Run a single test class:**
 ```bash
-./gradlew app:testInternalReleaseUnitTest --no-configuration-cache -x processInternalReleaseVersionCodes \
+./gradlew app:testDevDebugUnitTest --no-configuration-cache \
   --tests "org.zotero.android.sync.DateParserTest"
 ```
 
@@ -117,18 +120,20 @@ AAPT=$(ls -1 "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
   | grep -E "package:|SdkVersion|native-code|application-label:"
 ```
 
-As built from master at `098dcfb3` (synced with upstream, versionCode 250):
+As of the 2026-08 upstream sync (versionCode 271, per `buildSrc/src/main/kotlin/BuildConfig.kt`):
 
 | Property | Value |
 |---|---|
 | `applicationId` | `org.zotero.android` |
 | App label | `Zotero` (internal flavor) |
-| `versionCode` / `versionName` | `250` / `1.0.0-250` |
+| `versionCode` / `versionName` | `271` / `1.0.0-271` |
 | `minSdkVersion` | 23 (Android 6.0) — see `buildSrc/src/main/kotlin/BuildConfig.kt` |
-| `targetSdkVersion` / `compileSdk` | 35 (Android 15) |
-| Bundled ABIs | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
+| `targetSdkVersion` / `compileSdk` | 36 / 37 |
+| Bundled ABIs | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` (last verified at versionCode 250; not re-inspected this sync — see note below) |
 
-Because the APK is universal (covers `arm64-v8a`) with `minSdk` 23 and forward-compatible `targetSdk` 35, the same file runs on all modern Android versions. Verified target devices for this build:
+> **Not re-verified against a built APK this sync:** local `assembleInternalRelease` is currently blocked by the `com.github.triplet.play` 4.0.0 regression noted above, so the `aapt2 dump badging` values and device table below reflect the last APK actually built (versionCode 250), not this sync's output. Re-run the `aapt2` inspection once local release builds work again.
+
+Because the APK is universal (covers `arm64-v8a`) with `minSdk` 23 and forward-compatible `targetSdk`, the same file runs on all modern Android versions. Verified target devices for the versionCode 250 build:
 
 | Device | Android | API | Status |
 |---|---|---|---|
